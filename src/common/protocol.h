@@ -9,13 +9,14 @@ typedef enum {
     CMD_REGISTER,
     CMD_LOGIN,
     CMD_SEARCH_MOVIE, 
+    CMD_LIST_MOVIE,
     CMD_QUIT
 } command_t;
 
 typedef struct {
     command_t cmd;
     int argc;
-    char args[4][128]; // đủ cho REGISTER/LOGIN/QUIT; sau này có thể tăng
+    char args[4][128]; // đủ cho các CMD khác nhau yêu cầu nhiều tham số
 } request_t;
 
 /**
@@ -24,9 +25,5 @@ typedef struct {
  */
 int parse_request_line(const char *line, request_t *req);
 
-/**
- * Build response line cho các trường hợp OK/ERR cơ bản.
- * Bạn có thể dùng trực tiếp sprintf trong server, nhưng để đây để tham khảo.
- */
 
 #endif

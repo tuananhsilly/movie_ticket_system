@@ -3,6 +3,7 @@
 #define MODELS_H
 
 #include <stdint.h>
+#include <time.h>
 
 #define USERNAME_MAX_LEN 32
 #define PASSWORD_MAX_LEN 64
@@ -16,19 +17,16 @@
 typedef struct {
     uint32_t id;
     char username[USERNAME_MAX_LEN];
-    char password[PASSWORD_MAX_LEN]; // để đơn giản, không hash
+    char password[PASSWORD_MAX_LEN]; // xâu thông thường, không hashed 
     uint32_t roles; // bitmask
 } User;
 
-/**
- * Chuyển bitmask roles -> chuỗi role_list, ví dụ "CUSTOMER,MANAGER"
- */
+
+//   Chuyển bitmask roles -> chuỗi role_list, ví dụ "CUSTOMER,MANAGER"
+
 void roles_to_string(uint32_t roles, char *out, int out_size);
 
-/**
- * Parse chuỗi role list thành bitmask (không thực sự cần cho REGISTER/LOGIN,
- * nhưng để sẵn).
- */
+// Parse chuỗi role list thành bitmask 
 uint32_t string_to_roles(const char *role_str);
 
 // Model Movie
@@ -37,9 +35,25 @@ uint32_t string_to_roles(const char *role_str);
 
 typedef struct {
     uint32_t id;
-    char title[TITLE_MAX_LEN];    // dùng '_' thay ' ' khi gửi qua wire
+    char title[TITLE_MAX_LEN];    // dùng '_' thay ' ' khi gửi qua giao thức
     char genre[GENRE_MAX_LEN];
     int duration_min;
 } Movie;
+
+//Model movie show (xuất chiếu)
+#define CINEMA_ID_MAX_LEN 32
+#define ROOM_ID_MAX_LEN 32
+#define DATE_STR_LEN 16  // YYYY-MM-DD
+#define TIME_STR_LEN 16   // HH:MM
+
+typedef struct {
+    uint32_t id;
+    uint32_t movie_id;
+    char cinema_id[CINEMA_ID_MAX_LEN];
+    char room_id[ROOM_ID_MAX_LEN];
+    char date[DATE_STR_LEN];
+    char start_time[TIME_STR_LEN];
+    char end_time[TIME_STR_LEN];
+} Show;
 
 #endif

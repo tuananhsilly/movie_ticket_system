@@ -8,6 +8,7 @@ static command_t command_from_string(const char *cmd) {
     if (strcmp(cmd, "LOGIN") == 0)    return CMD_LOGIN;
     if (strcmp(cmd, "QUIT") == 0)     return CMD_QUIT;
     if (strcmp(cmd, "SEARCH_MOVIE") == 0) return CMD_SEARCH_MOVIE;
+    if (strcmp(cmd, "LIST_MOVIE") == 0) return CMD_LIST_MOVIE;
     return CMD_UNKNOWN;
 }
 

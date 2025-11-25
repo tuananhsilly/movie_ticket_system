@@ -108,6 +108,9 @@ void server_handle_line(client_session_t *session, const char *line) {
         case CMD_SEARCH_MOVIE:
             handle_search_movie(session, &req);
             break;
+        case CMD_LIST_MOVIE:
+            handle_list_movie(session, &req);
+            break;
         case CMD_QUIT: {
             char resp[128];
             snprintf(resp, sizeof(resp), "OK QUIT BYE\n");

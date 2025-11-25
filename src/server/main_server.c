@@ -48,6 +48,10 @@ int main() {
         return 1;
     }
 
+    if (db_load_shows("data/shows.csv") != 0) {
+        fprintf(stderr, "Warning: cannot load shows DB\n");
+    }
+
     // Khởi tạo socket listen
     int listen_fd;
     if (server_init(&listen_fd) != 0) {

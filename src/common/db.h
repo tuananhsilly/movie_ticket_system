@@ -4,6 +4,9 @@
 
 #include "models.h"
 
+
+// USER 
+
 /**
  * Khởi tạo DB.
  * users_path: path tới file data/users.csv
@@ -32,6 +35,9 @@ int db_find_user(const char *username, char *out_password, int pw_size, uint32_t
  * movies_path: "data/movies.csv"
  * Trả 0 nếu OK, -1 nếu lỗi.
  */
+
+
+ //MOVIE FUNCTIONS
  int db_load_movies(const char *movies_path);
 
  /**
@@ -41,5 +47,20 @@ int db_find_user(const char *username, char *out_password, int pw_size, uint32_t
   * Trả số lượng phim tìm được (0..max_results).
   */
  int db_search_movies_by_title(const char *keyword, Movie *results, int max_results);
+
+
+ //LIST MOVIE SHOW FUNCTIONS
+
+ int db_load_shows(const char *shows_path);
+
+ // Duyệt theo thể loại
+int db_list_movies_by_genre(const char *genre, Movie *results, int max_results);
  
+//Duyệt theo rạp: cinema_id: Trả về các movie có ít nhất 1 show ở cinema đó 
+int db_list_movies_by_cinema(const char *cinema_id, Movie *results, int max_results);
+
+/* Duyệt phim theo khung giờ: date + [HH:MM, HH:MM]
+Return về các movie có ít nhất 1 show trong khoảng thời gian đó */
+int db_list_movies_by_timeslot(const char *date, const char *from_time, const char *to_time, Movie *results, int max_results);
+
 #endif

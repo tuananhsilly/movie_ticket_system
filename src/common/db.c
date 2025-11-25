@@ -11,6 +11,13 @@ static char g_users_path[256] = "data/users.csv";
 static Movie g_movies[MAX_MOVIES];
 static int   g_movie_count = 0;
 
+//SHOW STORAGE IN-MEMORY
+#define MAX_SHOWS 2048
+static Show  g_shows[MAX_SHOWS];
+static int   g_show_count = 0;
+
+
+
 int db_init(const char *users_path) {
     if (users_path) {
         strncpy(g_users_path, users_path, sizeof(g_users_path) - 1);
@@ -33,6 +40,7 @@ int db_init(const char *users_path) {
     return 0;
 }
 
+//USER FUNCTIONS
 static uint32_t db_get_next_user_id() {
     FILE *f = fopen(g_users_path, "r");
     if (!f) return 1;
@@ -167,4 +175,126 @@ int db_search_movies_by_title(const char *keyword, Movie *results, int max_resul
         }
     }
     return count;
+}
+
+// SHOW FUNCTIONS
+int db_load_shows(const char *shows_path) {
+    g_show_count = 0;
+    FILE *f = fopen(shows_path, "r");
+    if (!f) {
+        perror("db_load_shows: cannot open shows file");
+        return -1;
+    }
+    char line[512];
+    //header: id,movie_id,cinema_id,room_id,date,time
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 0;
+    }
+    while (fgets(line, sizeof(line), f)) {
+        if (g_show_count >= MAX_SHOWS) break;
+
+        // id,movie_id,cinema_id,room_id,date,start_time,end_time
+        char *id_str = strtok(line, ",");
+        char *movie_id_str = strtok(NULL, ",");
+        char *cinema_str = strtok(NULL, ",");
+        char *room_str = strtok(NULL, ",");
+        char *date_str = strtok(NULL, ",");
+        char *start_time_str = strtok(NULL, ",");
+        char *end_time_str = strtok(NULL, ",\n\r");
+
+        if (!id_str || !movie_id_str || !cinema_str || !room_str || 
+            !date_str || !start_time_str || !end_time_str) continue;
+
+        Show s;
+        s.id = (uint32_t)atoi(id_str);
+        s.movie_id = (uint32_t)atoi(movie_id_str);
+
+        strncpy(s.cinema_id, cinema_str, sizeof(s.cinema_id) - 1);
+        s.cinema_id[sizeof(s.cinema_id) - 1] = '\0';
+
+        strncpy(s.room_id, room_str, sizeof(s.room_id) - 1);
+        s.room_id[sizeof(s.room_id) - 1] = '\0';
+
+        strncpy(s.date, date_str, sizeof(s.date) - 1);
+        s.date[sizeof(s.date) - 1] = '\0';
+
+        strncpy(s.start_time, start_time_str, sizeof(s.start_time) - 1);
+        s.start_time[sizeof(s.start_time) - 1] = '\0';
+
+        strncpy(s.end_time, end_time_str, sizeof(s.end_time) - 1);
+        s.end_time[sizeof(s.end_time) - 1] = '\0';
+
+        g_shows[g_show_count++] = s;
+    }
+
+    fclose(f);
+    return 0;
+}
+
+
+
+static Movie *find_movie_by_id(uint32_t movie_id) {
+    for (int i = 0; i < g_movie_count; i++) {
+        if (g_movies[i].id == movie_id) {
+            return &g_movies[i];
+        }
+    }
+    return NULL;
+}
+
+//Tránh trùng lặp khi duyệt theo genre, cinema, timeslot
+
+static void add_movie_if_not_exists(Movie *results, int *pcount, int max_results, const Movie *m) {
+    if (*pcount >= max_results) return;
+    for (int i = 0; i < *pcount; i++) {
+        if (results[i].id == m->id) return;
+    }
+    results[*pcount] = *m;
+    (*pcount)++;
+}
+
+//LIST MOVIE SHOW FUNCTIONS
+int db_list_movies_by_genre(const char *genre, Movie *results, int max_results) {
+    int count = 0;
+    for (int i = 0; i < g_movie_count && count < max_results; i++) {
+        if (strcmp(g_movies[i].genre, genre) == 0) {
+            results[count++] = g_movies[i];
+        }
+    }
+    return count;
+}
+
+int db_list_movies_by_cinema(const char *cinema_id, Movie *results, int max_results) {
+    int count = 0;
+    for (int i = 0; i < g_show_count; i++) {
+        if (strcmp(g_shows[i].cinema_id, cinema_id) == 0) {
+            Movie *m = find_movie_by_id(g_shows[i].movie_id);
+            if (m) {
+                add_movie_if_not_exists(results, &count, max_results, m);
+            }
+        }
+    }
+    return count;
+}
+
+//Kiểm tra overlap giữa 2 khoảng thời gian
+static int timeslot_overlaps(const char *show_start, const char *show_end, 
+    const char *req_from, const char *req_to) {
+return (strcmp(show_start, req_to) <= 0 && strcmp(show_end, req_from) >= 0);
+}
+
+int db_list_movies_by_timeslot(const char *date, const char *from_time, const char *to_time,
+      Movie *results, int max_results) {
+int count = 0;
+for (int i = 0; i < g_show_count; i++) {
+if (strcmp(g_shows[i].date, date) == 0 &&
+timeslot_overlaps(g_shows[i].start_time, g_shows[i].end_time, from_time, to_time)) {
+Movie *m = find_movie_by_id(g_shows[i].movie_id);
+if (m) {
+add_movie_if_not_exists(results, &count, max_results, m);
+}
+}
+}
+return count;
 }

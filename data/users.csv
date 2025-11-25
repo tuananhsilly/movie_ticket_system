@@ -2,3 +2,4 @@ user_id,username,password_hash,roles
 1,admin,hashed_pw,ADMIN,MANAGER
 2,alice,hashed_pw,CUSTOMER
 3,tuan,1234,1
+4,diep,1234,1

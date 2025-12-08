@@ -130,7 +130,7 @@ void handle_list_movie(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // Vai trò: cho phép mọi role đã login
+    // 2. Kiểm tra role - chỉ CUSTOMER mới được phép
     if (!(session->roles & ROLE_CUSTOMER)) {
         snprintf(resp, sizeof(resp),
                  "ERR LIST_MOVIE NO_PERMISSION Role_not_allowed\n");

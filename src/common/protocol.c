@@ -9,6 +9,9 @@ static command_t command_from_string(const char *cmd) {
     if (strcmp(cmd, "QUIT") == 0)     return CMD_QUIT;
     if (strcmp(cmd, "SEARCH_MOVIE") == 0) return CMD_SEARCH_MOVIE;
     if (strcmp(cmd, "LIST_MOVIE") == 0) return CMD_LIST_MOVIE;
+    if (strcmp(cmd, "GET_SEATS") == 0) return CMD_GET_SEATS;
+    if (strcmp(cmd, "LIST_SHOW") == 0) return CMD_LIST_SHOW;
+    if (strcmp(cmd, "BOOK_SEATS") == 0) return CMD_BOOK_SEATS;
     return CMD_UNKNOWN;
 }
 
@@ -30,7 +33,7 @@ int parse_request_line(const char *line, request_t *req) {
     }
 
     int argc = 0;
-    while ((token = strtok_r(NULL, " ", &saveptr)) != NULL && argc < 4) {
+    while ((token = strtok_r(NULL, " ", &saveptr)) != NULL && argc < 20) {
         strncpy(req->args[argc], token, sizeof(req->args[argc]) - 1);
         req->args[argc][sizeof(req->args[argc]) - 1] = '\0';
         argc++;

@@ -74,6 +74,13 @@ void handle_login(client_session_t *session, const request_t *req) {
     strncpy(session->username, username, sizeof(session->username) - 1);
     session->username[sizeof(session->username) - 1] = '\0';
 
+    // TODO: Lấy user_id từ DB và gán vào session->user_id
+    // Tạm thời dùng 1, sau này cần thêm hàm db_get_user_id_by_username()
+    session->user_id = db_get_user_id_by_username(username);
+    if (session->user_id == 0) {
+        session->user_id = 1; // Fallback nếu không tìm thấy (không nên xảy ra)
+    }
+
     char role_list[ROLE_STRING_MAX_LEN];
     roles_to_string(roles, role_list, sizeof(role_list));
 

@@ -3,8 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 
 static char g_users_path[256] = "data/users.csv";
+static char g_bookings_path[256] = "data/bookings.csv";
 
 //MOVIE STORAGE IN-MEMORY
 #define MAX_MOVIES 1024
@@ -23,6 +29,11 @@ int db_init(const char *users_path) {
         strncpy(g_users_path, users_path, sizeof(g_users_path) - 1);
         g_users_path[sizeof(g_users_path) - 1] = '\0';
     }
+    
+    // Đảm bảo thư mục data tồn tại
+    mkdir("data", 0755);
+    mkdir("data/seats", 0755);
+    
     // Nếu file chưa tồn tại, tạo file và ghi header đơn giản
     FILE *f = fopen(g_users_path, "r");
     if (!f) {
@@ -37,6 +48,23 @@ int db_init(const char *users_path) {
     } else {
         fclose(f);
     }
+    
+    // Khởi tạo bookings.csv nếu chưa có
+    FILE *f_bookings = fopen(g_bookings_path, "r");
+    if (!f_bookings) {
+        f_bookings = fopen(g_bookings_path, "w");
+        if (f_bookings) {
+            // Format: id,user_id,show_id,seat_count,seat_list,status,booked_at
+            fprintf(f_bookings, "id,user_id,show_id,seat_count,seat_list,status,booked_at\n");
+            fclose(f_bookings);
+        } else {
+            perror("db_init: cannot create bookings file");
+            // Không return error vì đây không phải critical
+        }
+    } else {
+        fclose(f_bookings);
+    }
+    
     return 0;
 }
 
@@ -94,6 +122,40 @@ int db_find_user(const char *username, char *out_password, int pw_size, uint32_t
 
     fclose(f);
     return -1;
+}
+
+uint32_t db_get_user_id_by_username(const char *username) {
+    FILE *f = fopen(g_users_path, "r");
+    if (!f) return 0;
+
+    char line[256];
+    // Bỏ header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 0;
+    }
+
+    while (fgets(line, sizeof(line), f)) {
+        // Tạo copy của line để strtok không modify buffer gốc
+        char line_copy[256];
+        strncpy(line_copy, line, sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        // id,username,password,roles
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        char *user_str = strtok_r(NULL, ",", &saveptr);
+        
+        if (!id_str || !user_str) continue;
+        if (strcmp(user_str, username) == 0) {
+            uint32_t user_id = (uint32_t)atoi(id_str);
+            fclose(f);
+            return user_id;
+        }
+    }
+    
+    fclose(f);
+    return 0;
 }
 
 int db_add_user(const char *username, const char *password, uint32_t roles) {
@@ -209,22 +271,26 @@ int db_load_shows(const char *shows_path) {
         Show s;
         s.id = (uint32_t)atoi(id_str);
         s.movie_id = (uint32_t)atoi(movie_id_str);
-
-        strncpy(s.cinema_id, cinema_str, sizeof(s.cinema_id) - 1);
+    
+            strncpy(s.cinema_id, cinema_str, sizeof(s.cinema_id) - 1);
         s.cinema_id[sizeof(s.cinema_id) - 1] = '\0';
-
+    
         strncpy(s.room_id, room_str, sizeof(s.room_id) - 1);
         s.room_id[sizeof(s.room_id) - 1] = '\0';
-
+    
         strncpy(s.date, date_str, sizeof(s.date) - 1);
         s.date[sizeof(s.date) - 1] = '\0';
-
+    
         strncpy(s.start_time, start_time_str, sizeof(s.start_time) - 1);
         s.start_time[sizeof(s.start_time) - 1] = '\0';
-
+    
         strncpy(s.end_time, end_time_str, sizeof(s.end_time) - 1);
         s.end_time[sizeof(s.end_time) - 1] = '\0';
-
+    
+            // Mặc định rows và cols (có thể đọc từ CSV sau nếu cần)
+        s.rows = 10;  // Mặc định 10 hàng
+        s.cols = 15;  // Mặc định 15 cột
+    
         g_shows[g_show_count++] = s;
     }
 
@@ -286,15 +352,308 @@ return (strcmp(show_start, req_to) <= 0 && strcmp(show_end, req_from) >= 0);
 
 int db_list_movies_by_timeslot(const char *date, const char *from_time, const char *to_time,
       Movie *results, int max_results) {
-int count = 0;
-for (int i = 0; i < g_show_count; i++) {
-if (strcmp(g_shows[i].date, date) == 0 &&
-timeslot_overlaps(g_shows[i].start_time, g_shows[i].end_time, from_time, to_time)) {
-Movie *m = find_movie_by_id(g_shows[i].movie_id);
-if (m) {
-add_movie_if_not_exists(results, &count, max_results, m);
+    int count = 0;
+    for (int i = 0; i < g_show_count; i++) {
+        if (strcmp(g_shows[i].date, date) == 0 &&
+            timeslot_overlaps(g_shows[i].start_time, g_shows[i].end_time, from_time, to_time)) {
+        Movie *m = find_movie_by_id(g_shows[i].movie_id);
+        if (m) {
+            add_movie_if_not_exists(results, &count, max_results, m);
+            }
+        }
+    }
+    return count;
 }
+
+int db_list_shows_by_movie(uint32_t movie_id, const char *date, Show *results, int max_results) {
+    int count = 0;
+    for (int i = 0; i < g_show_count && count < max_results; i++) {
+        // Kiểm tra movie_id khớp
+        if (g_shows[i].movie_id != movie_id) continue;
+        
+        // Nếu có date filter, kiểm tra date
+        if (date != NULL && strlen(date) > 0) {
+            if (strcmp(g_shows[i].date, date) != 0) continue;
+        }
+        
+        // Thêm vào results
+        results[count++] = g_shows[i];
+    }
+    return count;
 }
+
+// SEAT FUNCTIONS
+Show* db_find_show_by_id(uint32_t show_id) {
+    for (int i = 0; i < g_show_count; i++) {
+        if (g_shows[i].id == show_id) {
+            return &g_shows[i];
+        }
+    }
+    return NULL;
 }
-return count;
+
+static void get_seats_file_path(uint32_t show_id, char *path, size_t path_size) {
+    snprintf(path, path_size, "data/seats/show_%u_seats.csv", show_id);
+}
+
+int db_init_seats_for_show(uint32_t show_id, int rows, int cols) {
+    char path[256];
+    get_seats_file_path(show_id, path, sizeof(path));
+    
+    // Kiểm tra file đã tồn tại chưa
+    FILE *f = fopen(path, "r");
+    if (f) {
+        fclose(f);
+        return 0; // Đã tồn tại, không cần tạo lại
+    }
+    
+    // Tạo file mới với header
+    f = fopen(path, "w");
+    if (!f) {
+        perror("db_init_seats_for_show: cannot create seats file");
+        return -1;
+    }
+    
+    fprintf(f, "row,col,status,booking_id\n");
+    
+    // Tạo tất cả ghế với status FREE
+    for (int row = 1; row <= rows; row++) {
+        for (int col = 1; col <= cols; col++) {
+            fprintf(f, "%d,%d,FREE,0\n", row, col);
+        }
+    }
+    
+    fclose(f);
+    return 0;
+}
+
+int db_load_seats_for_show(uint32_t show_id, Seat *seats, int max_seats, int *out_rows, int *out_cols) {
+    char path[256];
+    get_seats_file_path(show_id, path, sizeof(path));
+    
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        // File không tồn tại, có thể cần khởi tạo
+        return -1;
+    }
+    
+    char line[256];
+    // Bỏ header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 0;
+    }
+    
+    int count = 0;
+    int max_row = 0, max_col = 0;
+    
+    while (fgets(line, sizeof(line), f) && count < max_seats) {
+        // Format: row,col,status,booking_id
+        char *row_str = strtok(line, ",");
+        char *col_str = strtok(NULL, ",");
+        char *status_str = strtok(NULL, ",");
+        char *booking_id_str = strtok(NULL, ",\n\r");
+        
+        if (!row_str || !col_str || !status_str) continue;
+        
+        Seat s;
+        s.show_id = show_id;
+        s.row = atoi(row_str);
+        s.col = atoi(col_str);
+        strncpy(s.status, status_str, sizeof(s.status) - 1);
+        s.status[sizeof(s.status) - 1] = '\0';
+        s.booking_id = booking_id_str ? (uint32_t)atoi(booking_id_str) : 0;
+        
+        if (s.row > max_row) max_row = s.row;
+        if (s.col > max_col) max_col = s.col;
+        
+        seats[count++] = s;
+    }
+    
+    fclose(f);
+    
+    if (out_rows) *out_rows = max_row;
+    if (out_cols) *out_cols = max_col;
+    
+    return count;
+}
+
+int db_get_seats_for_show(uint32_t show_id, Seat *results, int max_results, int *out_rows, int *out_cols) {
+    // Tìm show để lấy rows và cols mặc định
+    Show *show = db_find_show_by_id(show_id);
+    if (!show) {
+        return -1; // Show không tồn tại
+    }
+    
+    // Nếu show chưa có rows/cols, dùng giá trị mặc định
+    int rows = show->rows > 0 ? show->rows : 10;
+    int cols = show->cols > 0 ? show->cols : 15;
+    
+    // Khởi tạo seats nếu chưa có file
+    db_init_seats_for_show(show_id, rows, cols);
+    
+    // Load seats từ file
+    int count = db_load_seats_for_show(show_id, results, max_results, out_rows, out_cols);
+    
+    if (count < 0) {
+        // File không tồn tại, trả về seats mặc định (tất cả FREE)
+        count = 0;
+        for (int row = 1; row <= rows && count < max_results; row++) {
+            for (int col = 1; col <= cols && count < max_results; col++) {
+                results[count].show_id = show_id;
+                results[count].row = row;
+                results[count].col = col;
+                strcpy(results[count].status, "FREE");
+                results[count].booking_id = 0;
+                count++;
+            }
+        }
+        if (out_rows) *out_rows = rows;
+        if (out_cols) *out_cols = cols;
+    }
+    
+    return count;
+}
+
+// BOOKING FUNCTIONS
+
+// static char g_bookings_path[256] = "data/bookings.csv";
+
+static uint32_t db_get_next_booking_id() {
+    FILE *f = fopen(g_bookings_path, "r");
+    if (!f) return 5001; // Bắt đầu từ 5001
+    
+    char line[512];
+    uint32_t last_id = 5000;
+    
+    // Bỏ header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 5001;
+    }
+    
+    while (fgets(line, sizeof(line), f)) {
+        char *id_str = strtok(line, ",");
+        if (!id_str) continue;
+        uint32_t id = (uint32_t)atoi(id_str);
+        if (id > last_id) last_id = id;
+    }
+    
+    fclose(f);
+    return last_id + 1;
+}
+
+int db_check_seat_available(uint32_t show_id, int row, int col) {
+    Seat seats[200];
+    int rows = 0, cols = 0;
+    int count = db_get_seats_for_show(show_id, seats, 200, &rows, &cols);
+    
+    if (count < 0) return -1;
+    
+    // Kiểm tra row và col có hợp lệ không
+    if (row < 1 || row > rows || col < 1 || col > cols) {
+        return -1; // Out of range
+    }
+    
+    // Tìm seat
+    for (int i = 0; i < count; i++) {
+        if (seats[i].row == row && seats[i].col == col) {
+            if (strcmp(seats[i].status, "FREE") == 0) {
+                return 0; // Available
+            } else {
+                return -1; // Already booked
+            }
+        }
+    }
+    
+    return -1; // Not found
+}
+
+int db_update_seat_status(uint32_t show_id, int row, int col, const char *status, uint32_t booking_id) {
+    char path[256];
+    get_seats_file_path(show_id, path, sizeof(path));
+    
+    // Đọc toàn bộ file vào memory
+    Seat seats[200];
+    int rows = 0, cols = 0;
+    int count = db_get_seats_for_show(show_id, seats, 200, &rows, &cols);
+    
+    if (count < 0) return -1;
+    
+    // Update seat trong memory
+    int found = 0;
+    for (int i = 0; i < count; i++) {
+        if (seats[i].row == row && seats[i].col == col) {
+            strncpy(seats[i].status, status, sizeof(seats[i].status) - 1);
+            seats[i].status[sizeof(seats[i].status) - 1] = '\0';
+            seats[i].booking_id = booking_id;
+            found = 1;
+            break;
+        }
+    }
+    
+    if (!found) return -1;
+    
+    // Ghi lại toàn bộ file
+    FILE *f = fopen(path, "w");
+    if (!f) return -1;
+    
+    fprintf(f, "row,col,status,booking_id\n");
+    for (int i = 0; i < count; i++) {
+        fprintf(f, "%d,%d,%s,%u\n",
+                seats[i].row, seats[i].col, seats[i].status, seats[i].booking_id);
+    }
+    
+    fclose(f);
+    return 0;
+}
+
+int db_create_booking(uint32_t user_id, uint32_t show_id,
+                     const int *seat_rows, const int *seat_cols, int seat_count,
+                     uint32_t *booking_id_out) {
+    // 1. Kiểm tra tất cả ghế có available không
+    for (int i = 0; i < seat_count; i++) {
+        if (db_check_seat_available(show_id, seat_rows[i], seat_cols[i]) != 0) {
+            return -1; // Có ghế không available
+        }
+    }
+    
+    // 2. Tạo booking ID mới
+    uint32_t booking_id = db_get_next_booking_id();
+    
+    // 3. Update tất cả seats thành BOOKED
+    for (int i = 0; i < seat_count; i++) {
+        if (db_update_seat_status(show_id, seat_rows[i], seat_cols[i], "BOOKED", booking_id) != 0) {
+            // Rollback: đặt lại các ghế đã update về FREE
+            for (int j = 0; j < i; j++) {
+                db_update_seat_status(show_id, seat_rows[j], seat_cols[j], "FREE", 0);
+            }
+            return -1;
+        }
+    }
+    
+    // 4. Ghi booking vào file bookings.csv
+    FILE *f = fopen(g_bookings_path, "a");
+    if (!f) {
+        // Rollback seats
+        for (int i = 0; i < seat_count; i++) {
+            db_update_seat_status(show_id, seat_rows[i], seat_cols[i], "FREE", 0);
+        }
+        return -1;
+    }
+    
+    // Format: id,user_id,show_id,seat_count,seat_list,status,booked_at
+    // seat_list: "row1:col1,row2:col2,..."
+    fprintf(f, "%u,%u,%u,%d,", booking_id, user_id, show_id, seat_count);
+    
+    for (int i = 0; i < seat_count; i++) {
+        fprintf(f, "%d:%d", seat_rows[i], seat_cols[i]);
+        if (i < seat_count - 1) fprintf(f, ",");
+    }
+    
+    fprintf(f, ",confirmed,%ld\n", (long)time(NULL));
+    fclose(f);
+    
+    if (booking_id_out) *booking_id_out = booking_id;
+    return 0;
 }

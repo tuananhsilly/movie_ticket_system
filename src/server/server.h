@@ -20,6 +20,7 @@ typedef struct {
     session_state_t state;
     char username[USERNAME_MAX_LEN];
     uint32_t roles; // bitmask
+    uint32_t user_id; // ID của user đã login
 } client_session_t;
 
 /**

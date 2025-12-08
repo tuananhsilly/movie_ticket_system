@@ -9,4 +9,8 @@ void handle_register(client_session_t *session, const request_t *req);
 void handle_login(client_session_t *session, const request_t *req);
 void handle_search_movie(client_session_t *session, const request_t *req);
 void handle_list_movie(client_session_t *session, const request_t *req);
+void handle_list_show(client_session_t *session, const request_t *req);
+void handle_get_seats(client_session_t *session, const request_t *req);
+void handle_book_seats(client_session_t *session, const request_t *req);
+
 #endif

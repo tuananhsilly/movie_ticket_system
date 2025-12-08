@@ -54,6 +54,29 @@ typedef struct {
     char date[DATE_STR_LEN];
     char start_time[TIME_STR_LEN];
     char end_time[TIME_STR_LEN];
+    int rows; // So hang va so cot cua phong chieu 
+    int cols;
 } Show;
 
+//Model seat
+#define SEAT_STATUS_MAX_LEN 16
+typedef struct {
+    uint32_t show_id;
+    int row;
+    int col;
+    char status[SEAT_STATUS_MAX_LEN];
+    uint32_t booking_id; // ID booking nếu đã đặt, 0 nếu FREE
+} Seat;
+
+//Model booking
+typedef struct {
+    uint32_t id;
+    uint32_t user_id;
+    uint32_t show_id;
+    int seat_count;
+    int seat_rows[20];  // Tối đa 20 ghế
+    int seat_cols[20];
+    char status[16];    // "confirmed", "cancelled"
+    time_t booked_at;
+} Booking;
 #endif

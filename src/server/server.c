@@ -48,12 +48,13 @@ void sessions_init(client_session_t sessions[], int size) {
         sessions[i].sockfd = -1;
         sessions[i].state  = SESSION_STATE_NOT_AUTH;
         sessions[i].roles  = 0;
+        sessions[i].user_id = 0;
         sessions[i].username[0] = '\0';
     }
 }
 
 int sessions_add_client(client_session_t sessions[], int size, int client_fd) {
-    // Set TCP_NODELAY để tắt Nagle's algorithm, gửi dữ liệu ngay lập tức
+    // Set TCP_NODELAY để gửi dữ liệu ngay lập tức
     int flag = 1;
     setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
     
@@ -62,6 +63,7 @@ int sessions_add_client(client_session_t sessions[], int size, int client_fd) {
             sessions[i].sockfd = client_fd;
             sessions[i].state  = SESSION_STATE_NOT_AUTH;
             sessions[i].roles  = 0;
+            sessions[i].user_id = 0;
             sessions[i].username[0] = '\0';
             return i;
         }
@@ -75,6 +77,7 @@ void sessions_remove_client(client_session_t sessions[], int idx) {
         sessions[idx].sockfd = -1;
         sessions[idx].state  = SESSION_STATE_NOT_AUTH;
         sessions[idx].roles  = 0;
+        sessions[idx].user_id = 0;
         sessions[idx].username[0] = '\0';
     }
 }
@@ -110,6 +113,15 @@ void server_handle_line(client_session_t *session, const char *line) {
             break;
         case CMD_LIST_MOVIE:
             handle_list_movie(session, &req);
+            break;
+        case CMD_LIST_SHOW:
+            handle_list_show(session, &req);
+            break;
+        case CMD_GET_SEATS:
+            handle_get_seats(session, &req);
+            break;
+        case CMD_BOOK_SEATS:
+            handle_book_seats(session, &req);
             break;
         case CMD_QUIT: {
             char resp[128];

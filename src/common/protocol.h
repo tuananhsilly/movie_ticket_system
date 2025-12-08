@@ -10,13 +10,16 @@ typedef enum {
     CMD_LOGIN,
     CMD_SEARCH_MOVIE, 
     CMD_LIST_MOVIE,
+    CMD_LIST_SHOW,
+    CMD_GET_SEATS,
+    CMD_BOOK_SEATS,
     CMD_QUIT
 } command_t;
 
 typedef struct {
     command_t cmd;
     int argc;
-    char args[4][128]; // đủ cho các CMD khác nhau yêu cầu nhiều tham số
+    char args[20][128]; // Tăng lên để hỗ trợ BOOK_SEATS với nhiều ghế 
 } request_t;
 
 /**

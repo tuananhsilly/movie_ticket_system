@@ -13,6 +13,10 @@ typedef enum {
     CMD_LIST_SHOW,
     CMD_GET_SEATS,
     CMD_BOOK_SEATS,
+    CMD_ADD_MOVIE,
+    CMD_CREATE_USER,
+    CMD_GRANT_ROLE,
+    CMD_REVOKE_ROLE,
     CMD_QUIT
 } command_t;
 

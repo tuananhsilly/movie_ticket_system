@@ -32,12 +32,14 @@ uint32_t string_to_roles(const char *role_str);
 // Model Movie
 #define TITLE_MAX_LEN   128
 #define GENRE_MAX_LEN   64
+#define DESCRIPTION_MAX_LEN 512
 
 typedef struct {
     uint32_t id;
     char title[TITLE_MAX_LEN];    // dùng '_' thay ' ' khi gửi qua giao thức
     char genre[GENRE_MAX_LEN];
     int duration_min;
+    char description[DESCRIPTION_MAX_LEN];
 } Movie;
 
 //Model movie show (xuất chiếu)

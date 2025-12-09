@@ -121,4 +121,33 @@ int db_check_seat_available(uint32_t show_id, int row, int col);
 */
 int db_update_seat_status(uint32_t show_id, int row, int col, const char *status, uint32_t booking_id);
 
+
+// ADD MOVIE FUNCTIONS
+int db_add_movie(const char *title, const char *genre, int duration_min, const char *description, uint32_t *movie_id_out);
+
+// ADMIN FUNCTIONS
+
+/**
+ * Cập nhật role của một user.
+ * username: username của user cần update
+ * new_roles: bitmask roles mới
+ * Trả 0 nếu thành công, -1 nếu user không tồn tại hoặc lỗi.
+ */
+ int db_update_user_role(const char *username, uint32_t new_roles);
+
+ /**
+  * Thêm role vào user hiện có (không ghi đè, chỉ thêm).
+  * username: username của user
+  * role_to_add: role cần thêm (ROLE_CUSTOMER, ROLE_MANAGER, hoặc ROLE_ADMIN)
+  * Trả 0 nếu thành công, -1 nếu lỗi.
+  */
+ int db_grant_role(const char *username, uint32_t role_to_add);
+ 
+ /**
+  * Gỡ role khỏi user hiện có.
+  * username: username của user
+  * role_to_remove: role cần gỡ (ROLE_CUSTOMER, ROLE_MANAGER, hoặc ROLE_ADMIN)
+  * Trả 0 nếu thành công, -1 nếu lỗi.
+  */
+ int db_revoke_role(const char *username, uint32_t role_to_remove);
 #endif

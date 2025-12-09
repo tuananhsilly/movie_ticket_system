@@ -12,6 +12,10 @@ static command_t command_from_string(const char *cmd) {
     if (strcmp(cmd, "GET_SEATS") == 0) return CMD_GET_SEATS;
     if (strcmp(cmd, "LIST_SHOW") == 0) return CMD_LIST_SHOW;
     if (strcmp(cmd, "BOOK_SEATS") == 0) return CMD_BOOK_SEATS;
+    if (strcmp(cmd, "ADD_MOVIE") == 0) return CMD_ADD_MOVIE;    
+    if (strcmp(cmd, "CREATE_USER") == 0) return CMD_CREATE_USER;
+    if (strcmp(cmd, "GRANT_ROLE") == 0) return CMD_GRANT_ROLE;
+    if (strcmp(cmd, "REVOKE_ROLE") == 0) return CMD_REVOKE_ROLE;
     return CMD_UNKNOWN;
 }
 

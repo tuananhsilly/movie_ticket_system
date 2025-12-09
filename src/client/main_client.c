@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdlib.h>
-// ... existing includes ...
+#include "../common/models.h"
 
 #define SERVER_PORT 9000
 
@@ -50,8 +50,18 @@ static void menu_not_logged_in() {
     printf("Choose: ");
 }
 
-static void menu_logged_in() {
-    printf("=== Movie Ticket Client ===\n");
+static void menu_manager_admin(){
+    printf("=== Movie Ticket Client(Manager/Admin) ===\n");
+    printf("1. ADD_MOVIE\n");
+    printf("2. CREATE_USER\n");
+    printf("3. GRANT_ROLE\n");
+    printf("4. REVOKE_ROLE\n");
+    printf("5. QUIT\n");
+    printf("Choose: ");
+}
+
+static void menu_customer() {
+    printf("=== Movie Ticket Client(Customer) ===\n");
     printf("1. SEARCH_MOVIE\n");
     printf("2. LIST_MOVIE\n");
     printf("3. LIST_SHOW\n");
@@ -99,11 +109,17 @@ int main(int argc, char *argv[]) {
     char resp[512];
 
     int logged_in = 0; // client-side flag đơn giản
+    uint32_t client_roles = 0;
 
     while (1) {
         // Hiển thị menu phù hợp với trạng thái
         if (logged_in) {
-            menu_logged_in();
+            // Kiểm tra role để hiển thị menu phù hợp
+            if (client_roles & (ROLE_MANAGER | ROLE_ADMIN)) {
+                menu_manager_admin();
+            } else {
+                menu_customer();
+            }
         } else {
             menu_not_logged_in();
         }
@@ -148,13 +164,144 @@ int main(int argc, char *argv[]) {
                 if (strstr(resp, "OK LOGIN LOGIN_OK") != NULL) {
                     logged_in = 1;
                     printf("Login successful! Welcome!\n");
+                    // Parse role từ response: "OK LOGIN LOGIN_OK CUSTOMER,MANAGER"
+                    char *role_str = strstr(resp, "OK LOGIN LOGIN_OK");
+                    if (role_str) {
+                        role_str += strlen("OK LOGIN LOGIN_OK ");
+                        // Trim whitespace
+                        while (*role_str == ' ') role_str++;
+                        client_roles = string_to_roles(role_str);
+                    }
                 } else {
                     logged_in = 0;
+                    client_roles = 0;
                 }
             } else {
                 printf("Invalid choice. Please choose 1 or 2.\n");
             }
         } else {
+            // Menu khi đã login
+            if (client_roles & (ROLE_MANAGER | ROLE_ADMIN)) {
+                // Menu manager/admin
+                if (choice == 1) {
+                    // ADD_MOVIE
+                    char title[128], genre[64], description[512];
+                    int duration_min;
+                    
+                    printf("Title: ");
+                    fgets(title, sizeof(title), stdin);
+                    title[strcspn(title, "\r\n")] = '\0';
+                    
+                    printf("Genre: ");
+                    fgets(genre, sizeof(genre), stdin);
+                    genre[strcspn(genre, "\r\n")] = '\0';
+                    
+                    printf("Duration (minutes): ");
+                    scanf("%d", &duration_min);
+                    while (getchar() != '\n'); // clear stdin
+                    
+                    printf("Description: ");
+                    fgets(description, sizeof(description), stdin);
+                    description[strcspn(description, "\r\n")] = '\0';
+                    
+                    // Thay khoảng trắng bằng '_'
+                    for (int i = 0; title[i]; i++) {
+                        if (title[i] == ' ') title[i] = '_';
+                    }
+                    for (int i = 0; genre[i]; i++) {
+                        if (genre[i] == ' ') genre[i] = '_';
+                    }
+                    for (int i = 0; description[i]; i++) {
+                        if (description[i] == ' ') description[i] = '_';
+                    }
+                    
+                    snprintf(line, sizeof(line), "ADD_MOVIE %s %s %d %s\n", 
+                             title, genre, duration_min, description);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    printf("SERVER: %s", resp);
+                    
+                    // Parse response để hiển thị movie_id
+                    uint32_t movie_id = 0;
+                    if (sscanf(resp, "OK ADD_MOVIE CREATED %u", &movie_id) == 1) {
+                        printf("Movie added successfully! Movie ID: %u\n", movie_id);
+                    }
+                } else if (choice == 2) {
+                    // CREATE_USER
+                    char new_username[64], new_password[64];
+                    
+                    printf("New username: ");
+                    fgets(new_username, sizeof(new_username), stdin);
+                    new_username[strcspn(new_username, "\r\n")] = '\0';
+                    
+                    printf("New password: ");
+                    fgets(new_password, sizeof(new_password), stdin);
+                    new_password[strcspn(new_password, "\r\n")] = '\0';
+                    
+                    snprintf(line, sizeof(line), "CREATE_USER %s %s\n", new_username, new_password);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    printf("SERVER: %s", resp);
+                    
+                } else if (choice == 3) {
+                    // GRANT_ROLE
+                    char target_username[64], role[32];
+                    
+                    printf("Username: ");
+                    fgets(target_username, sizeof(target_username), stdin);
+                    target_username[strcspn(target_username, "\r\n")] = '\0';
+                    
+                    printf("Role (CUSTOMER/MANAGER/ADMIN): ");
+                    fgets(role, sizeof(role), stdin);
+                    role[strcspn(role, "\r\n")] = '\0';
+                    
+                    snprintf(line, sizeof(line), "GRANT_ROLE %s %s\n", target_username, role);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    printf("SERVER: %s", resp);
+                    
+                } else if (choice == 4) {
+                    // REVOKE_ROLE
+                    char target_username[64], role[32];
+                    
+                    printf("Username: ");
+                    fgets(target_username, sizeof(target_username), stdin);
+                    target_username[strcspn(target_username, "\r\n")] = '\0';
+                    
+                    printf("Role (CUSTOMER/MANAGER/ADMIN): ");
+                    fgets(role, sizeof(role), stdin);
+                    role[strcspn(role, "\r\n")] = '\0';
+                    
+                    snprintf(line, sizeof(line), "REVOKE_ROLE %s %s\n", target_username, role);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    printf("SERVER: %s", resp);
+                    
+                } else if (choice == 5) {
+                    // QUIT
+                    snprintf(line, sizeof(line), "QUIT\n");
+                    client_send_line(sockfd, line);
+                    break;
+                } else {
+                    printf("Invalid choice.\n");
+                }
+            } else {
             // Menu khi đã login
             if (choice == 1) {
                 // SEARCH_MOVIE
@@ -517,7 +664,7 @@ int main(int argc, char *argv[]) {
                     unsigned int show_id;
                     int rows, cols;
                     if (sscanf(trimmed_resp, "OK GET_SEATS %u %d %d", &show_id, &rows, &cols) == 3) {
-                        printf("\n=== Seat Map for Show %u (%dx%d) ===\n", show_id, rows, cols);
+                        printf("\nSeat Map for Show %u (%dx%d) \n", show_id, rows, cols);
                         
                         // Tạo mảng 2D để lưu seats
                         char seat_map[20][20]; // Max 20x20
@@ -562,7 +709,7 @@ int main(int argc, char *argv[]) {
                         // Hiển thị bản đồ ghế với row dạng chữ cái
                         printf("\n   ");
                         for (int c = 1; c <= cols; c++) {
-                            printf("%3d ", c);
+                            printf("%2d ", c);
                         }
                         printf("\n");
                         
@@ -576,7 +723,7 @@ int main(int argc, char *argv[]) {
                             printf("\n");
                         }
                         
-                        printf("\nLegend: O = Available, X = Booked, H = Held\n");
+                        printf("\nLegend: O = Available, X = Booked\n");
                         printf("------------------------------------------------------------\n\n");
                     }
                 }
@@ -681,6 +828,7 @@ int main(int argc, char *argv[]) {
                 break;
             } else {
                 printf("Invalid choice. Please choose 1, 2, or 3.\n");
+            }
             }
         }
     }

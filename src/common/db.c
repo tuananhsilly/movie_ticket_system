@@ -167,6 +167,31 @@ int db_add_user(const char *username, const char *password, uint32_t roles) {
         return -1;
     }
 
+    FILE *f_check = fopen(g_users_path, "r");
+    if (f_check) {
+        // Di chuyển đến cuối file
+        fseek(f_check, 0, SEEK_END);
+        long file_size = ftell(f_check);
+        
+        if (file_size > 0) {
+            // Đọc ký tự cuối cùng
+            fseek(f_check, file_size - 1, SEEK_SET);
+            char last_char = fgetc(f_check);
+            fclose(f_check);
+            
+            // Nếu ký tự cuối không phải \n, cần thêm \n
+            if (last_char != '\n') {
+                FILE *f_append_nl = fopen(g_users_path, "a");
+                if (f_append_nl) {
+                    fprintf(f_append_nl, "\n");
+                    fclose(f_append_nl);
+                }
+            }
+        } else {
+            fclose(f_check);
+        }
+    }
+
     FILE *f = fopen(g_users_path, "a");
     if (!f) return -1;
 
@@ -200,8 +225,8 @@ int db_load_movies(const char *movies_path) {
         char *id_str     = strtok(line, ",");
         char *title_str  = strtok(NULL, ",");
         char *genre_str  = strtok(NULL, ",");
-        char *dur_str    = strtok(NULL, ",\n\r");
-
+        char *dur_str    = strtok(NULL, ",");
+        char *desc_str   = strtok(NULL, ",\n\r");
         if (!id_str || !title_str || !genre_str || !dur_str) continue;
 
         Movie m;
@@ -215,6 +240,13 @@ int db_load_movies(const char *movies_path) {
         m.genre[sizeof(m.genre) - 1] = '\0';
 
         m.duration_min = atoi(dur_str);
+
+        if (desc_str) {
+            strncpy(m.description, desc_str, sizeof(m.description) - 1);
+            m.description[sizeof(m.description) - 1] = '\0';
+        } else {
+            m.description[0] = '\0';
+        }
 
         g_movies[g_movie_count++] = m;
     }
@@ -656,4 +688,155 @@ int db_create_booking(uint32_t user_id, uint32_t show_id,
     
     if (booking_id_out) *booking_id_out = booking_id;
     return 0;
+}
+
+// ADD MOVIE FUNCTIONS
+static uint32_t db_get_next_movie_id() {
+    // Tìm movie ID lớn nhất trong g_movies[]
+    uint32_t max_id = 0;
+    for (int i = 0; i < g_movie_count; i++) {
+        if (g_movies[i].id > max_id) {
+            max_id = g_movies[i].id;
+        }
+    }
+    return max_id + 1;
+}
+
+int db_add_movie(const char *title, const char *genre, int duration_min,
+                 const char *description, uint32_t *movie_id_out) {
+    // 1. Validate input
+    if (!title || strlen(title) == 0 || !genre || duration_min <= 0) {
+        return -1;
+    }
+    
+    // 2. Tạo movie ID mới
+    uint32_t new_id = db_get_next_movie_id();
+    
+    // 3. Thêm vào in-memory array
+    if (g_movie_count >= MAX_MOVIES) {
+        return -1; // Array đầy
+    }
+    
+    Movie m;
+    m.id = new_id;
+    strncpy(m.title, title, sizeof(m.title) - 1);
+    m.title[sizeof(m.title) - 1] = '\0';
+    
+    strncpy(m.genre, genre, sizeof(m.genre) - 1);
+    m.genre[sizeof(m.genre) - 1] = '\0';
+    
+    m.duration_min = duration_min;
+    
+    if (description) {
+        strncpy(m.description, description, sizeof(m.description) - 1);
+        m.description[sizeof(m.description) - 1] = '\0';
+    } else {
+        m.description[0] = '\0';
+    }
+    
+    g_movies[g_movie_count++] = m;
+    
+    // 4. Ghi vào file CSV
+    FILE *f = fopen("data/movies.csv", "a");  // Append mode
+    if (!f) {
+        // Rollback: xóa khỏi array
+        g_movie_count--;
+        return -1;
+    }
+    
+    // Format: id,title,genre,duration,description
+    fprintf(f, "%u,%s,%s,%d,%s\n", m.id, m.title, m.genre, m.duration_min, m.description);
+    fclose(f);
+    
+    if (movie_id_out) *movie_id_out = new_id;
+    return 0;
+}
+
+// Thêm các hàm này vào db.c
+
+int db_update_user_role(const char *username, uint32_t new_roles) {
+    // Đọc toàn bộ file users.csv vào memory
+    FILE *f = fopen(g_users_path, "r");
+    if (!f) return -1;
+    
+    char lines[1000][256]; // Giả sử tối đa 1000 users
+    int line_count = 0;
+    int found = 0;
+    
+    // Đọc header
+    if (!fgets(lines[line_count++], sizeof(lines[0]), f)) {
+        fclose(f);
+        return -1;
+    }
+    
+    // Đọc tất cả các dòng
+    while (fgets(lines[line_count], sizeof(lines[0]), f) && line_count < 1000) {
+        char line_copy[256];
+        strncpy(line_copy, lines[line_count], sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        char *user_str = strtok_r(NULL, ",", &saveptr);
+        
+        if (user_str && strcmp(user_str, username) == 0) {
+            // Tìm thấy user, update role
+            char *pw_str = strtok_r(NULL, ",", &saveptr);
+            if (id_str && pw_str) {
+                snprintf(lines[line_count], sizeof(lines[0]), 
+                        "%s,%s,%s,%u\n", id_str, user_str, pw_str, new_roles);
+                found = 1;
+            }
+        }
+        line_count++;
+    }
+    fclose(f);
+    
+    if (!found) return -1;
+    
+    // Ghi lại toàn bộ file
+    f = fopen(g_users_path, "w");
+    if (!f) return -1;
+    
+    for (int i = 0; i < line_count; i++) {
+        fprintf(f, "%s", lines[i]);
+    }
+    fclose(f);
+    
+    return 0;
+}
+
+int db_grant_role(const char *username, uint32_t role_to_add) {
+    char pw_buf[PASSWORD_MAX_LEN];
+    uint32_t current_roles = 0;
+    
+    // Lấy roles hiện tại
+    if (db_find_user(username, pw_buf, sizeof(pw_buf), &current_roles) != 0) {
+        return -1; // User không tồn tại
+    }
+    
+    // Thêm role mới (bitwise OR)
+    uint32_t new_roles = current_roles | role_to_add;
+    
+    return db_update_user_role(username, new_roles);
+}
+
+int db_revoke_role(const char *username, uint32_t role_to_remove) {
+    char pw_buf[PASSWORD_MAX_LEN];
+    uint32_t current_roles = 0;
+    
+    // Lấy roles hiện tại
+    if (db_find_user(username, pw_buf, sizeof(pw_buf), &current_roles) != 0) {
+        return -1; // User không tồn tại
+    }
+    
+    // Gỡ role (bitwise AND với NOT)
+    uint32_t new_roles = current_roles & (~role_to_remove);
+    
+    // Đảm bảo user luôn có ít nhất ROLE_CUSTOMER
+    if (new_roles == 0) {
+        new_roles = ROLE_CUSTOMER;
+    }
+    
+    return db_update_user_role(username, new_roles);
 }

@@ -212,3 +212,67 @@ void handle_list_movie(client_session_t *session, const request_t *req) {
     send(session->sockfd, resp, strlen(resp), 0);
     log_msg("SEND", session->sockfd, resp);
 }
+
+void handle_add_movie(client_session_t *session, const request_t *req) {
+    char resp[512];
+    
+    // 1. Kiểm tra đã login?
+    if (session->state != SESSION_STATE_LOGGED_IN) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE NOT_AUTHENTICATED Please_login_first\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 2. Kiểm tra role: chỉ MANAGER hoặc ADMIN
+    if (!(session->roles & ROLE_MANAGER) && !(session->roles & ROLE_ADMIN)) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE NO_PERMISSION Only_manager_or_admin_can_add_movie\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 3. Kiểm tra args: ADD_MOVIE <title> <genre> <duration_min> <description>
+    if (req->argc < 4) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE INVALID_ARGS Need_title_genre_duration_description\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    const char *title = req->args[0];
+    const char *genre = req->args[1];
+    int duration_min = atoi(req->args[2]);
+    const char *description = req->args[3];
+    
+    // 4. Validate
+    if (strlen(title) == 0 || strlen(genre) == 0 || duration_min <= 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE INVALID_ARGS Invalid_title_genre_or_duration\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 5. Thêm vào database
+    uint32_t movie_id = 0;
+    int ret = db_add_movie(title, genre, duration_min, description, &movie_id);
+    
+    if (ret == 0) {
+        snprintf(resp, sizeof(resp),
+                 "OK ADD_MOVIE CREATED %u\n", movie_id);
+    } else {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE FAILED Internal_error\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    snprintf(resp, sizeof(resp), "END\n");
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+}

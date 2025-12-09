@@ -123,6 +123,18 @@ void server_handle_line(client_session_t *session, const char *line) {
         case CMD_BOOK_SEATS:
             handle_book_seats(session, &req);
             break;
+        case CMD_ADD_MOVIE:
+            handle_add_movie(session, &req);
+            break;
+        case CMD_CREATE_USER:
+            handle_create_user(session, &req);
+            break;
+        case CMD_GRANT_ROLE:
+            handle_grant_role(session, &req);
+            break;
+        case CMD_REVOKE_ROLE:
+            handle_revoke_role(session, &req);
+            break;
         case CMD_QUIT: {
             char resp[128];
             snprintf(resp, sizeof(resp), "OK QUIT BYE\n");

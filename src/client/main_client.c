@@ -68,7 +68,9 @@ static void menu_customer() {
     printf("3. LIST_SHOW\n");
     printf("4. GET_SEATS\n");
     printf("5. BOOK_SEATS\n");
-    printf("6. QUIT\n");
+    printf("6. VIEW_BOOKINGS\n");
+    printf("7. CANCEL_BOOKING\n");
+    printf("8. QUIT\n");
     printf("Choose: ");
 }
 
@@ -871,6 +873,95 @@ int main(int argc, char *argv[]) {
                     }
                 }
             } else if (choice == 6) {
+                // VIEW_BOOKINGS
+                snprintf(line, sizeof(line), "VIEW_BOOKINGS\n");
+                client_send_line(sockfd, line);
+            
+                if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                    printf("Server closed connection\n");
+                    break;
+                }
+            
+                char *trimmed_resp = resp;
+                while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                size_t len = strlen(trimmed_resp);
+                while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                   trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                    trimmed_resp[--len] = '\0';
+                }
+            
+                printf("SERVER: %s\n", trimmed_resp);
+                
+                // Kiểm tra nếu EMPTY
+                if (strstr(trimmed_resp, "EMPTY") != NULL) {
+                    printf("No bookings found.\n");
+                    continue;
+                }
+                
+                // Đọc danh sách booking cho đến khi gặp "END"
+                if (strstr(trimmed_resp, "FOUND") != NULL) {
+                    int booking_count = 0;
+                    sscanf(trimmed_resp, "OK VIEW_BOOKINGS FOUND %d", &booking_count);
+                    printf("Found %d booking(s):\n", booking_count);
+                    printf("------------------------------------------------------------\n");
+                    
+                    while (1) {
+                        if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                            printf("Server closed connection\n");
+                            break;
+                        }
+                        
+                        trimmed_resp = resp;
+                        while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                        len = strlen(trimmed_resp);
+                        while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                          trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                            trimmed_resp[--len] = '\0';
+                        }
+                        
+                        if (strcmp(trimmed_resp, "END") == 0) {
+                            break;
+                        }
+                        
+                        if (strncmp(trimmed_resp, "BOOKING", 7) == 0) {
+                            // Parse: BOOKING <id> <show_id> <seat_count> <seat_list> <status> <booked_at>
+                            printf("  %s\n", trimmed_resp);
+                        }
+                    }
+                    printf("------------------------------------------------------------\n");
+                }
+            } else if (choice == 7) {
+                // CANCEL_BOOKING
+                char booking_id_str[16];
+                
+                printf("Booking ID: ");
+                fgets(booking_id_str, sizeof(booking_id_str), stdin);
+                booking_id_str[strcspn(booking_id_str, "\r\n")] = '\0';
+                
+                snprintf(line, sizeof(line), "CANCEL_BOOKING %s\n", booking_id_str);
+                client_send_line(sockfd, line);
+            
+                if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                    printf("Server closed connection\n");
+                    break;
+                }
+            
+                char *trimmed_resp = resp;
+                while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                size_t len = strlen(trimmed_resp);
+                while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                   trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                    trimmed_resp[--len] = '\0';
+                }
+            
+                printf("SERVER: %s\n", trimmed_resp);
+                
+                if (strstr(trimmed_resp, "OK CANCEL_BOOKING CANCELED") != NULL) {
+                    printf("Booking cancelled successfully!\n");
+                } else if (strstr(trimmed_resp, "ERR CANCEL_BOOKING") != NULL) {
+                    printf("Failed to cancel booking. Check booking ID.\n");
+                }
+            } else if (choice == 8) {
                 // QUIT
                 snprintf(line, sizeof(line), "QUIT\n");
                 client_send_line(sockfd, line);
@@ -879,7 +970,7 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             } else {
-                printf("Invalid choice. Please choose 1, 2, or 3.\n");
+                printf("Invalid choice. Please choose 1-8.\n");
             }
             }
         }

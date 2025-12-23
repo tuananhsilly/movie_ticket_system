@@ -920,3 +920,252 @@ int db_add_show(uint32_t movie_id, const char *cinema_id, const char *room_id,
     if (show_id_out) *show_id_out = new_id;
     return 0;
 }
+
+// UC5: VIEW_BOOKINGS & CANCEL_BOOKING
+
+int db_get_user_bookings(uint32_t user_id, Booking *bookings, int max_bookings) {
+    FILE *f = fopen(g_bookings_path, "r");
+    if (!f) return 0;
+    
+    char line[512];
+    int count = 0;
+    
+    // Bỏ header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 0;
+    }
+    
+    while (fgets(line, sizeof(line), f) && count < max_bookings) {
+        // Format: id,user_id,show_id,seat_count,seat_list,status,booked_at
+        // seat_list: "1:5,2:3,..."
+        
+        char line_copy[512];
+        strncpy(line_copy, line, sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        char *user_id_str = strtok_r(NULL, ",", &saveptr);
+        char *show_id_str = strtok_r(NULL, ",", &saveptr);
+        char *seat_count_str = strtok_r(NULL, ",", &saveptr);
+        char *seat_list_str = strtok_r(NULL, ",", &saveptr);
+        char *status_str = strtok_r(NULL, ",", &saveptr);
+        char *booked_at_str = strtok_r(NULL, ",\n\r", &saveptr);
+        
+        if (!id_str || !user_id_str || !show_id_str) continue;
+        
+        uint32_t bid = (uint32_t)atoi(id_str);
+        uint32_t buser_id = (uint32_t)atoi(user_id_str);
+        
+        // Chỉ lấy booking của user này
+        if (buser_id != user_id) continue;
+        
+        bookings[count].id = bid;
+        bookings[count].user_id = buser_id;
+        bookings[count].show_id = (uint32_t)atoi(show_id_str);
+        bookings[count].seat_count = atoi(seat_count_str);
+        
+        if (status_str) {
+            strncpy(bookings[count].status, status_str, sizeof(bookings[count].status) - 1);
+            bookings[count].status[sizeof(bookings[count].status) - 1] = '\0';
+        }
+        
+        if (booked_at_str) {
+            bookings[count].booked_at = (time_t)atol(booked_at_str);
+        }
+        
+        // Parse seat_list: "1:5,2:3,..."
+        if (seat_list_str) {
+            char seat_copy[256];
+            strncpy(seat_copy, seat_list_str, sizeof(seat_copy) - 1);
+            seat_copy[sizeof(seat_copy) - 1] = '\0';
+            
+            char *seat_saveptr;
+            char *seat_pair = strtok_r(seat_copy, ",", &seat_saveptr);
+            int seat_idx = 0;
+            
+            while (seat_pair && seat_idx < 20) {
+                char pair_copy[32];
+                strncpy(pair_copy, seat_pair, sizeof(pair_copy) - 1);
+                pair_copy[sizeof(pair_copy) - 1] = '\0';
+                
+                char *row_str = strtok(pair_copy, ":");
+                char *col_str = strtok(NULL, ":");
+                
+                if (row_str && col_str) {
+                    bookings[count].seat_rows[seat_idx] = atoi(row_str);
+                    bookings[count].seat_cols[seat_idx] = atoi(col_str);
+                    seat_idx++;
+                }
+                
+                seat_pair = strtok_r(NULL, ",", &seat_saveptr);
+            }
+        }
+        
+        count++;
+    }
+    
+    fclose(f);
+    return count;
+}
+
+int db_cancel_booking(uint32_t booking_id, uint32_t user_id) {
+    // 1. Tìm booking trong file
+    FILE *f = fopen(g_bookings_path, "r");
+    if (!f) return -4;
+    
+    char line[512];
+    char temp_file[] = "data/bookings.csv.tmp";
+    FILE *temp = fopen(temp_file, "w");
+    if (!temp) {
+        fclose(f);
+        return -4;
+    }
+    
+    int found = 0;
+    int owner_mismatch = 0;
+    int already_cancelled = 0;
+    
+    // Bỏ header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        fclose(temp);
+        remove(temp_file);
+        return -4;
+    }
+    
+    // Ghi header vào temp file
+    fprintf(temp, "id,user_id,show_id,seat_count,seat_list,status,booked_at\n");
+    
+    while (fgets(line, sizeof(line), f)) {
+        char line_copy[512];
+        strncpy(line_copy, line, sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        char *user_id_str = strtok_r(NULL, ",", &saveptr);
+        char *show_id_str = strtok_r(NULL, ",", &saveptr);
+        char *seat_count_str = strtok_r(NULL, ",", &saveptr);
+        char *seat_list_str = strtok_r(NULL, ",", &saveptr);
+        char *status_str = strtok_r(NULL, ",", &saveptr);
+        char *booked_at_str = strtok_r(NULL, ",\n\r", &saveptr);
+        
+        if (!id_str) continue;
+        
+        uint32_t bid = (uint32_t)atoi(id_str);
+        
+        if (bid == booking_id) {
+            found = 1;
+            uint32_t buser_id = (uint32_t)atoi(user_id_str);
+            
+            // Kiểm tra ownership
+            if (buser_id != user_id) {
+                owner_mismatch = 1;
+                fprintf(temp, "%s", line);
+                continue;
+            }
+            
+            // Kiểm tra status
+            if (status_str && strcmp(status_str, "cancelled") == 0) {
+                already_cancelled = 1;
+                fprintf(temp, "%s", line);
+                continue;
+            }
+            
+            // Update status thành "cancelled"
+            fprintf(temp, "%u,%u,%s,%s,%s,cancelled,%s\n", 
+                    bid, buser_id, show_id_str, seat_count_str, seat_list_str, booked_at_str);
+        } else {
+            fprintf(temp, "%s", line);
+        }
+    }
+    
+    fclose(f);
+    fclose(temp);
+    
+    if (!found) {
+        remove(temp_file);
+        return -1; // Booking không tìm thấy
+    }
+    
+    if (owner_mismatch) {
+        remove(temp_file);
+        return -2; // User không sở hữu booking
+    }
+    
+    if (already_cancelled) {
+        remove(temp_file);
+        return -3; // Booking đã cancelled
+    }
+    
+    // 2. Replace file gốc bằng temp file
+    if (rename(temp_file, g_bookings_path) != 0) {
+        remove(temp_file);
+        return -4; // Lỗi rename
+    }
+    
+    // 3. Cập nhật seats thành FREE
+    // Cần parse booking để lấy seat list
+    f = fopen(g_bookings_path, "r");
+    if (!f) return -4;
+    
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return -4;
+    }
+    
+    while (fgets(line, sizeof(line), f)) {
+        char line_copy[512];
+        strncpy(line_copy, line, sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        
+        if (!id_str) continue;
+        
+        uint32_t bid = (uint32_t)atoi(id_str);
+        if (bid == booking_id) {
+            char *user_id_str = strtok_r(NULL, ",", &saveptr);
+            char *show_id_str = strtok_r(NULL, ",", &saveptr);
+            char *seat_count_str = strtok_r(NULL, ",", &saveptr);
+            char *seat_list_str = strtok_r(NULL, ",", &saveptr);
+            
+            uint32_t show_id = (uint32_t)atoi(show_id_str);
+            
+            // Parse seat list
+            if (seat_list_str) {
+                char seat_copy[256];
+                strncpy(seat_copy, seat_list_str, sizeof(seat_copy) - 1);
+                seat_copy[sizeof(seat_copy) - 1] = '\0';
+                
+                char *seat_saveptr;
+                char *seat_pair = strtok_r(seat_copy, ",", &seat_saveptr);
+                
+                while (seat_pair) {
+                    char pair_copy[32];
+                    strncpy(pair_copy, seat_pair, sizeof(pair_copy) - 1);
+                    pair_copy[sizeof(pair_copy) - 1] = '\0';
+                    
+                    char *row_str = strtok(pair_copy, ":");
+                    char *col_str = strtok(NULL, ":");
+                    
+                    if (row_str && col_str) {
+                        int row = atoi(row_str);
+                        int col = atoi(col_str);
+                        db_update_seat_status(show_id, row, col, "FREE", 0);
+                    }
+                    
+                    seat_pair = strtok_r(NULL, ",", &seat_saveptr);
+                }
+            }
+            
+            break;
+        }
+    }
+    
+    fclose(f);
+    return 0; // Thành công
+}

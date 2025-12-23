@@ -18,6 +18,8 @@ typedef enum {
     CMD_CREATE_USER,
     CMD_GRANT_ROLE,
     CMD_REVOKE_ROLE,
+    CMD_VIEW_BOOKINGS,
+    CMD_CANCEL_BOOKING,
     CMD_QUIT
 } command_t;
 

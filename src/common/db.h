@@ -155,4 +155,27 @@ int db_add_show(uint32_t movie_id, const char *cinema_id, const char *room_id,
   * Trả 0 nếu thành công, -1 nếu lỗi.
   */
  int db_revoke_role(const char *username, uint32_t role_to_remove);
+
+// UC5: VIEW_BOOKINGS & CANCEL_BOOKING
+
+/**
+ * Lấy danh sách booking của user.
+ * user_id: ID của user
+ * bookings: mảng Booking để trả về
+ * max_bookings: kích thước mảng
+ * Trả số lượng booking tìm được (0 nếu không có).
+ */
+int db_get_user_bookings(uint32_t user_id, Booking *bookings, int max_bookings);
+
+/**
+ * Hủy booking (đặt status = "cancelled" và đánh dấu ghế FREE).
+ * booking_id: ID của booking cần hủy
+ * user_id: ID của user (để kiểm tra ownership)
+ * Trả 0 nếu thành công
+ * Trả -1 nếu booking không tìm thấy
+ * Trả -2 nếu user không sở hữu booking
+ * Trả -3 nếu booking đã cancelled trước đó
+ * Trả -4 nếu lỗi khác
+ */
+int db_cancel_booking(uint32_t booking_id, uint32_t user_id);
 #endif

@@ -53,10 +53,11 @@ static void menu_not_logged_in() {
 static void menu_manager_admin(){
     printf("=== Movie Ticket Client(Manager/Admin) ===\n");
     printf("1. ADD_MOVIE\n");
-    printf("2. CREATE_USER\n");
-    printf("3. GRANT_ROLE\n");
-    printf("4. REVOKE_ROLE\n");
-    printf("5. QUIT\n");
+    printf("2. ADD_SHOW\n");
+    printf("3. CREATE_USER\n");
+    printf("4. GRANT_ROLE\n");
+    printf("5. REVOKE_ROLE\n");
+    printf("6. QUIT\n");
     printf("Choose: ");
 }
 
@@ -231,6 +232,57 @@ int main(int argc, char *argv[]) {
                         printf("Movie added successfully! Movie ID: %u\n", movie_id);
                     }
                 } else if (choice == 2) {
+                    // ADD_SHOW
+                    uint32_t movie_id;
+                    char cinema_id[64], room_id[64], date[32], start_time[32], end_time[32];
+                    int rows, cols;
+                    
+                    printf("Movie ID: ");
+                    scanf("%u", &movie_id);
+                    while (getchar() != '\n'); // clear stdin
+                    
+                    printf("Cinema ID: ");
+                    fgets(cinema_id, sizeof(cinema_id), stdin);
+                    cinema_id[strcspn(cinema_id, "\r\n")] = '\0';
+                    
+                    printf("Room ID: ");
+                    fgets(room_id, sizeof(room_id), stdin);
+                    room_id[strcspn(room_id, "\r\n")] = '\0';
+                    
+                    printf("Date (YYYY-MM-DD): ");
+                    fgets(date, sizeof(date), stdin);
+                    date[strcspn(date, "\r\n")] = '\0';
+                    
+                    printf("Start Time (HH:MM): ");
+                    fgets(start_time, sizeof(start_time), stdin);
+                    start_time[strcspn(start_time, "\r\n")] = '\0';
+                    
+                    printf("End Time (HH:MM): ");
+                    fgets(end_time, sizeof(end_time), stdin);
+                    end_time[strcspn(end_time, "\r\n")] = '\0';
+                    
+                    printf("Rows: ");
+                    scanf("%d", &rows);
+                    printf("Cols: ");
+                    scanf("%d", &cols);
+                    while (getchar() != '\n'); // clear stdin
+                    
+                    snprintf(line, sizeof(line), "ADD_SHOW %u %s %s %s %s %s %d %d\n", 
+                             movie_id, cinema_id, room_id, date, start_time, end_time, rows, cols);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    printf("SERVER: %s", resp);
+                    
+                    // Parse response để hiển thị show_id
+                    uint32_t show_id = 0;
+                    if (sscanf(resp, "OK ADD_SHOW CREATED %u", &show_id) == 1) {
+                        printf("Show added successfully! Show ID: %u\n", show_id);
+                    }
+                } else if (choice == 3) {
                     // CREATE_USER
                     char new_username[64], new_password[64];
                     
@@ -251,7 +303,7 @@ int main(int argc, char *argv[]) {
                     }
                     printf("SERVER: %s", resp);
                     
-                } else if (choice == 3) {
+                } else if (choice == 4) {
                     // GRANT_ROLE
                     char target_username[64], role[32];
                     
@@ -272,7 +324,7 @@ int main(int argc, char *argv[]) {
                     }
                     printf("SERVER: %s", resp);
                     
-                } else if (choice == 4) {
+                } else if (choice == 5) {
                     // REVOKE_ROLE
                     char target_username[64], role[32];
                     
@@ -293,7 +345,7 @@ int main(int argc, char *argv[]) {
                     }
                     printf("SERVER: %s", resp);
                     
-                } else if (choice == 5) {
+                } else if (choice == 6) {
                     // QUIT
                     snprintf(line, sizeof(line), "QUIT\n");
                     client_send_line(sockfd, line);

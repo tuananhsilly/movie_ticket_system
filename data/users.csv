@@ -1,5 +1,8 @@
 id,username,password,roles
 1,tuan,1234,1
 2,diep,1234,1
-3,admin,admin1,6
+3,admin,admin1,4
 4,an,1234,2
+5,123,123,2
+6,1234,1234,1
+7,abcde,123,2

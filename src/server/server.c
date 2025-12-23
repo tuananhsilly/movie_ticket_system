@@ -126,6 +126,9 @@ void server_handle_line(client_session_t *session, const char *line) {
         case CMD_ADD_MOVIE:
             handle_add_movie(session, &req);
             break;
+        case CMD_ADD_SHOW:
+            handle_add_show(session, &req);
+            break;
         case CMD_CREATE_USER:
             handle_create_user(session, &req);
             break;

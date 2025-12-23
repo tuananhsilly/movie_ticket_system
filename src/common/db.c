@@ -840,3 +840,83 @@ int db_revoke_role(const char *username, uint32_t role_to_remove) {
     
     return db_update_user_role(username, new_roles);
 }
+
+// ADD SHOW FUNCTIONS
+static uint32_t db_get_next_show_id() {
+    // Tìm show ID lớn nhất trong g_shows[]
+    uint32_t max_id = 0;
+    for (int i = 0; i < g_show_count; i++) {
+        if (g_shows[i].id > max_id) {
+            max_id = g_shows[i].id;
+        }
+    }
+    return max_id + 1;
+}
+
+int db_add_show(uint32_t movie_id, const char *cinema_id, const char *room_id, 
+                const char *date, const char *start_time, const char *end_time,
+                int rows, int cols, uint32_t *show_id_out) {
+    // 1. Validate input
+    if (movie_id == 0 || !cinema_id || strlen(cinema_id) == 0 || 
+        !room_id || strlen(room_id) == 0 || !date || strlen(date) == 0 ||
+        !start_time || strlen(start_time) == 0 || !end_time || strlen(end_time) == 0 ||
+        rows <= 0 || cols <= 0) {
+        return -1;
+    }
+    
+    // 2. Kiểm tra movie có tồn tại không
+    Movie *movie = find_movie_by_id(movie_id);
+    if (!movie) {
+        return -1; // Movie không tồn tại
+    }
+    
+    // 3. Tạo show ID mới
+    uint32_t new_id = db_get_next_show_id();
+    
+    // 4. Thêm vào in-memory array
+    if (g_show_count >= MAX_SHOWS) {
+        return -1; // Array đầy
+    }
+    
+    Show s;
+    s.id = new_id;
+    s.movie_id = movie_id;
+    strncpy(s.cinema_id, cinema_id, sizeof(s.cinema_id) - 1);
+    s.cinema_id[sizeof(s.cinema_id) - 1] = '\0';
+    
+    strncpy(s.room_id, room_id, sizeof(s.room_id) - 1);
+    s.room_id[sizeof(s.room_id) - 1] = '\0';
+    
+    strncpy(s.date, date, sizeof(s.date) - 1);
+    s.date[sizeof(s.date) - 1] = '\0';
+    
+    strncpy(s.start_time, start_time, sizeof(s.start_time) - 1);
+    s.start_time[sizeof(s.start_time) - 1] = '\0';
+    
+    strncpy(s.end_time, end_time, sizeof(s.end_time) - 1);
+    s.end_time[sizeof(s.end_time) - 1] = '\0';
+    
+    s.rows = rows;
+    s.cols = cols;
+    
+    g_shows[g_show_count++] = s;
+    
+    // 5. Ghi vào file CSV
+    FILE *f = fopen("data/shows.csv", "a");  // Append mode
+    if (!f) {
+        // Rollback: xóa khỏi array
+        g_show_count--;
+        return -1;
+    }
+    
+    // Format: id,movie_id,cinema_id,room_id,date,start_time,end_time
+    fprintf(f, "%u,%u,%s,%s,%s,%s,%s\n", s.id, s.movie_id, s.cinema_id, s.room_id, 
+            s.date, s.start_time, s.end_time);
+    fclose(f);
+    
+    // 6. Khởi tạo seats cho show này
+    db_init_seats_for_show(new_id, rows, cols);
+    
+    if (show_id_out) *show_id_out = new_id;
+    return 0;
+}

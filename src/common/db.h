@@ -125,6 +125,11 @@ int db_update_seat_status(uint32_t show_id, int row, int col, const char *status
 // ADD MOVIE FUNCTIONS
 int db_add_movie(const char *title, const char *genre, int duration_min, const char *description, uint32_t *movie_id_out);
 
+// ADD SHOW FUNCTIONS
+int db_add_show(uint32_t movie_id, const char *cinema_id, const char *room_id, 
+                const char *date, const char *start_time, const char *end_time,
+                int rows, int cols, uint32_t *show_id_out);
+
 // ADMIN FUNCTIONS
 
 /**

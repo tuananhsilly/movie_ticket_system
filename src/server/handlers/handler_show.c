@@ -297,3 +297,77 @@ void handle_book_seats(client_session_t *session, const request_t *req) {
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
 }
+
+void handle_add_show(client_session_t *session, const request_t *req) {
+    char resp[512];
+    
+    // 1. Kiểm tra đã login?
+    if (session->state != SESSION_STATE_LOGGED_IN) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_SHOW NOT_AUTHENTICATED Please_login_first\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 2. Kiểm tra role: chỉ ADMIN được phép
+    if (!(session->roles & ROLE_ADMIN)) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_SHOW NO_PERMISSION Only_admin_can_add_show\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 3. Kiểm tra args: ADD_SHOW <movie_id> <cinema_id> <room_id> <date> <start_time> <end_time> <rows> <cols>
+    if (req->argc < 8) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_SHOW INVALID_ARGS Need_movie_id_cinema_room_date_start_end_rows_cols\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 4. Parse arguments
+    uint32_t movie_id = (uint32_t)atoi(req->args[0]);
+    const char *cinema_id = req->args[1];
+    const char *room_id = req->args[2];
+    const char *date = req->args[3];
+    const char *start_time = req->args[4];
+    const char *end_time = req->args[5];
+    int rows = atoi(req->args[6]);
+    int cols = atoi(req->args[7]);
+    
+    // 5. Validate arguments
+    if (movie_id == 0 || strlen(cinema_id) == 0 || strlen(room_id) == 0 || 
+        strlen(date) == 0 || strlen(start_time) == 0 || strlen(end_time) == 0 ||
+        rows <= 0 || cols <= 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_SHOW INVALID_ARGS Invalid_parameters\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 6. Thêm vào database
+    uint32_t show_id = 0;
+    int ret = db_add_show(movie_id, cinema_id, room_id, date, start_time, end_time, rows, cols, &show_id);
+    
+    if (ret == 0) {
+        snprintf(resp, sizeof(resp),
+                 "OK ADD_SHOW CREATED %u\n", show_id);
+    } else {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_SHOW FAILED Invalid_movie_id_or_database_error\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+    
+    snprintf(resp, sizeof(resp), "END\n");
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+}

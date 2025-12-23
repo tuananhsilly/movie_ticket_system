@@ -13,6 +13,7 @@ void handle_list_show(client_session_t *session, const request_t *req);
 void handle_get_seats(client_session_t *session, const request_t *req);
 void handle_book_seats(client_session_t *session, const request_t *req);
 void handle_add_movie(client_session_t *session, const request_t *req);
+void handle_add_show(client_session_t *session, const request_t *req);
 
 void handle_create_user(client_session_t *session, const request_t *req);
 void handle_grant_role(client_session_t *session, const request_t *req);

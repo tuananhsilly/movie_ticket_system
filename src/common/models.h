@@ -10,9 +10,9 @@
 #define ROLE_STRING_MAX_LEN 64
 
 // Bitmask role
-#define ROLE_CUSTOMER  (1u << 0)
-#define ROLE_MANAGER   (1u << 1)
-#define ROLE_ADMIN     (1u << 2)
+#define ROLE_CUSTOMER  (1u << 0) // 0001
+#define ROLE_MANAGER   (1u << 1) // 0010
+#define ROLE_ADMIN     (1u << 2) // 0100
 
 typedef struct {
     uint32_t id;

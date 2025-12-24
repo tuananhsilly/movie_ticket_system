@@ -371,3 +371,183 @@ void handle_add_show(client_session_t *session, const request_t *req) {
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
 }
+
+void handle_update_show(client_session_t *session, const request_t *req) {
+    char resp[512];
+    
+    // 1. Kiểm tra đã login?
+    if (session->state != SESSION_STATE_LOGGED_IN) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW NOT_AUTHENTICATED Please_login_first\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 2. Kiểm tra role: MANAGER hoặc ADMIN
+    if (!(session->roles & ROLE_MANAGER) && !(session->roles & ROLE_ADMIN)) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW NO_PERMISSION Only_manager_or_admin_can_update_shows\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 3. Kiểm tra args: UPDATE_SHOW <show_id> <new_date> <new_time>
+    // new_time format: "HH:MM-HH:MM"
+    if (req->argc < 3) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW INVALID_ARGS Need_show_id_date_and_time\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 4. Parse arguments
+    uint32_t show_id = (uint32_t)atoi(req->args[0]);
+    const char *new_date = req->args[1];
+    const char *time_str = req->args[2]; // Format: "HH:MM-HH:MM"
+    
+    // 5. Validate show_id
+    if (show_id == 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW SHOW_NOT_FOUND\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 6. Parse time string "HH:MM-HH:MM" thành start_time và end_time
+    char start_time[16] = {0};
+    char end_time[16] = {0};
+    char time_copy[32];
+    strncpy(time_copy, time_str, sizeof(time_copy) - 1);
+    time_copy[sizeof(time_copy) - 1] = '\0';
+    
+    char *dash = strchr(time_copy, '-');
+    if (!dash) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW INVALID_ARGS Time_format_must_be_HH:MM-HH:MM\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    *dash = '\0';
+    strncpy(start_time, time_copy, sizeof(start_time) - 1);
+    start_time[sizeof(start_time) - 1] = '\0';
+    strncpy(end_time, dash + 1, sizeof(end_time) - 1);
+    end_time[sizeof(end_time) - 1] = '\0';
+    
+    // 7. Validate date và time không rỗng
+    if (strlen(new_date) == 0 || strlen(start_time) == 0 || strlen(end_time) == 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW INVALID_ARGS Date_and_time_cannot_be_empty\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 8. Kiểm tra show có tồn tại không
+    Show *show = db_find_show_by_id(show_id);
+    if (!show) {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW SHOW_NOT_FOUND\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 9. Update show trong database
+    int ret = db_update_show_date_time(show_id, new_date, start_time, end_time);
+    
+    if (ret == 0) {
+        snprintf(resp, sizeof(resp),
+                 "OK UPDATE_SHOW UPDATED\n");
+    } else {
+        snprintf(resp, sizeof(resp),
+                 "ERR UPDATE_SHOW INTERNAL_ERROR Failed_to_update_show\n");
+    }
+    
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+}
+
+void handle_cancel_show(client_session_t *session, const request_t *req) {
+    char resp[512];
+    
+    // 1. Kiểm tra đã login?
+    if (session->state != SESSION_STATE_LOGGED_IN) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW NOT_AUTHENTICATED Please_login_first\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 2. Kiểm tra role: MANAGER hoặc ADMIN
+    if (!(session->roles & ROLE_MANAGER) && !(session->roles & ROLE_ADMIN)) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW NO_PERMISSION Only_manager_or_admin_can_cancel_shows\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 3. Kiểm tra args: CANCEL_SHOW <show_id>
+    if (req->argc < 1) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW INVALID_ARGS Need_show_id\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 4. Parse show_id
+    uint32_t show_id = (uint32_t)atoi(req->args[0]);
+    if (show_id == 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW SHOW_NOT_FOUND\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 5. Kiểm tra show có tồn tại không
+    Show *show = db_find_show_by_id(show_id);
+    if (!show) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW SHOW_NOT_FOUND\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 6. Kiểm tra có bookings không
+    int has_bookings = db_has_show_bookings(show_id);
+    if (has_bookings == 1) {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW HAS_BOOKINGS Cannot_cancel_show_with_tickets\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 7. Cancel show
+    int ret = db_cancel_show(show_id);
+    
+    if (ret == 0) {
+        snprintf(resp, sizeof(resp),
+                 "OK CANCEL_SHOW CANCELED\n");
+    } else if (ret == -2) {
+        // Đã check ở trên, nhưng double-check
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW HAS_BOOKINGS Cannot_cancel_show_with_tickets\n");
+    } else {
+        snprintf(resp, sizeof(resp),
+                 "ERR CANCEL_SHOW INTERNAL_ERROR Failed_to_cancel_show\n");
+    }
+    
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+}

@@ -129,6 +129,12 @@ void server_handle_line(client_session_t *session, const char *line) {
         case CMD_ADD_SHOW:
             handle_add_show(session, &req);
             break;
+        case CMD_UPDATE_SHOW:
+            handle_update_show(session, &req);
+            break;
+        case CMD_CANCEL_SHOW:
+            handle_cancel_show(session, &req);
+            break;
         case CMD_CREATE_USER:
             handle_create_user(session, &req);
             break;

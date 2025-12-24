@@ -1169,3 +1169,226 @@ int db_cancel_booking(uint32_t booking_id, uint32_t user_id) {
     fclose(f);
     return 0; // Thành công
 }
+
+// UPDATE SHOW FUNCTIONS
+int db_update_show_date_time(uint32_t show_id, const char *new_date, 
+    const char *start_time, const char *end_time) {
+    // 1. Validate input
+    if (show_id == 0 || !new_date || strlen(new_date) == 0 ||
+            !start_time || strlen(start_time) == 0 || 
+            !end_time || strlen(end_time) == 0) {
+    return -1;
+    }
+
+    // 2. Tìm show trong in-memory array
+    Show *show = db_find_show_by_id(show_id);
+    if (!show) {
+        return -1; // Show không tồn tại
+    }
+
+// 3. Update in-memory array
+strncpy(show->date, new_date, sizeof(show->date) - 1);
+show->date[sizeof(show->date) - 1] = '\0';
+
+strncpy(show->start_time, start_time, sizeof(show->start_time) - 1);
+show->start_time[sizeof(show->start_time) - 1] = '\0';
+
+strncpy(show->end_time, end_time, sizeof(show->end_time) - 1);
+show->end_time[sizeof(show->end_time) - 1] = '\0';
+
+// 4. Update CSV file (read all, update, write back)
+FILE *f = fopen("data/shows.csv", "r");
+if (!f) {
+return -1;
+}
+
+char lines[2048][512];
+int line_count = 0;
+int found = 0;
+
+// Đọc header
+if (!fgets(lines[line_count++], sizeof(lines[0]), f)) {
+fclose(f);
+return -1;
+}
+
+// Đọc tất cả các dòng
+while (fgets(lines[line_count], sizeof(lines[0]), f) && line_count < 2048) {
+char line_copy[512];
+strncpy(line_copy, lines[line_count], sizeof(line_copy) - 1);
+line_copy[sizeof(line_copy) - 1] = '\0';
+
+char *saveptr;
+char *id_str = strtok_r(line_copy, ",", &saveptr);
+
+if (id_str) {
+uint32_t id = (uint32_t)atoi(id_str);
+if (id == show_id) {
+// Tìm thấy show, update dòng này
+// Format: id,movie_id,cinema_id,room_id,date,start_time,end_time
+char *movie_id_str = strtok_r(NULL, ",", &saveptr);
+char *cinema_id_str = strtok_r(NULL, ",", &saveptr);
+char *room_id_str = strtok_r(NULL, ",", &saveptr);
+
+if (movie_id_str && cinema_id_str && room_id_str) {
+snprintf(lines[line_count], sizeof(lines[0]), 
+   "%u,%s,%s,%s,%s,%s,%s\n", 
+   show_id, movie_id_str, cinema_id_str, room_id_str, 
+   new_date, start_time, end_time);
+found = 1;
+}
+}
+}
+line_count++;
+}
+fclose(f);
+
+if (!found) {
+return -1; // Show không tìm thấy trong file
+}
+
+// 5. Ghi lại toàn bộ file
+f = fopen("data/shows.csv", "w");
+if (!f) {
+return -1;
+}
+
+for (int i = 0; i < line_count; i++) {
+fprintf(f, "%s", lines[i]);
+}
+fclose(f);
+
+return 0;
+}
+
+int db_has_show_bookings(uint32_t show_id) {
+FILE *f = fopen(g_bookings_path, "r");
+if (!f) {
+return -1; // File không tồn tại hoặc lỗi
+}
+
+char line[512];
+
+// Bỏ header
+if (!fgets(line, sizeof(line), f)) {
+fclose(f);
+return 0; // Không có bookings
+}
+
+// Đọc tất cả các dòng
+while (fgets(line, sizeof(line), f)) {
+char line_copy[512];
+strncpy(line_copy, line, sizeof(line_copy) - 1);
+line_copy[sizeof(line_copy) - 1] = '\0';
+
+char *saveptr;
+char *id_str = strtok_r(line_copy, ",", &saveptr);
+char *user_id_str = strtok_r(NULL, ",", &saveptr);
+char *show_id_str = strtok_r(NULL, ",", &saveptr);
+char *seat_count_str = strtok_r(NULL, ",", &saveptr);
+char *seat_list_str = strtok_r(NULL, ",", &saveptr);
+char *status_str = strtok_r(NULL, ",\n\r", &saveptr);
+
+if (!show_id_str || !status_str) continue;
+
+uint32_t bshow_id = (uint32_t)atoi(show_id_str);
+
+// Kiểm tra show_id khớp và status là "confirmed"
+if (bshow_id == show_id && strcmp(status_str, "confirmed") == 0) {
+fclose(f);
+return 1; // Có bookings
+}
+}
+
+fclose(f);
+return 0; // Không có bookings
+}
+
+int db_cancel_show(uint32_t show_id) {
+// 1. Kiểm tra show có tồn tại không
+Show *show = db_find_show_by_id(show_id);
+if (!show) {
+return -1; // Show không tồn tại
+}
+
+// 2. Kiểm tra có bookings không
+int has_bookings = db_has_show_bookings(show_id);
+if (has_bookings == 1) {
+return -2; // Có bookings, không thể cancel
+}
+if (has_bookings == -1) {
+return -1; // Lỗi khi check bookings
+}
+
+// 3. Xóa khỏi in-memory array
+int found_index = -1;
+for (int i = 0; i < g_show_count; i++) {
+if (g_shows[i].id == show_id) {
+found_index = i;
+break;
+}
+}
+
+if (found_index == -1) {
+return -1; // Không tìm thấy trong array
+}
+
+// Shift các phần tử sau lên
+for (int i = found_index; i < g_show_count - 1; i++) {
+g_shows[i] = g_shows[i + 1];
+}
+g_show_count--;
+
+// 4. Xóa khỏi CSV file
+FILE *f = fopen("data/shows.csv", "r");
+if (!f) {
+return -1;
+}
+
+char lines[2048][512];
+int line_count = 0;
+
+// Đọc header
+if (!fgets(lines[line_count++], sizeof(lines[0]), f)) {
+fclose(f);
+return -1;
+}
+
+// Đọc tất cả các dòng, bỏ qua show cần xóa
+while (fgets(lines[line_count], sizeof(lines[0]), f) && line_count < 2048) {
+char line_copy[512];
+strncpy(line_copy, lines[line_count], sizeof(line_copy) - 1);
+line_copy[sizeof(line_copy) - 1] = '\0';
+
+char *saveptr;
+char *id_str = strtok_r(line_copy, ",", &saveptr);
+
+if (id_str) {
+uint32_t id = (uint32_t)atoi(id_str);
+if (id == show_id) {
+
+continue;
+}
+}
+line_count++;
+}
+fclose(f);
+
+// 5. Ghi lại file (không có show đã xóa)
+f = fopen("data/shows.csv", "w");
+if (!f) {
+return -1;
+}
+
+for (int i = 0; i < line_count; i++) {
+fprintf(f, "%s", lines[i]);
+}
+fclose(f);
+
+// 6. (Optional) Xóa seats file nếu muốn cleanup
+// char seats_path[256];
+// get_seats_file_path(show_id, seats_path, sizeof(seats_path));
+// remove(seats_path);
+
+return 0;
+}

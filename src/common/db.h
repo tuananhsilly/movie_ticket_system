@@ -178,4 +178,21 @@ int db_get_user_bookings(uint32_t user_id, Booking *bookings, int max_bookings);
  * Trả -4 nếu lỗi khác
  */
 int db_cancel_booking(uint32_t booking_id, uint32_t user_id);
+
+//UPDATE SHOW FUNCTIONS
+int db_update_show_date_time(uint32_t show_id, const char *new_date, 
+    const char *start_time, const char *end_time);
+
+/**
+* Check if a show has any confirmed bookings.
+* Returns 1 if has bookings, 0 if no bookings, -1 on error.
+*/
+int db_has_show_bookings(uint32_t show_id);
+
+/**
+* Cancel (delete) a show.
+* Only works if show has no bookings.
+* Returns 0 on success, -1 on error.
+*/
+int db_cancel_show(uint32_t show_id);
 #endif

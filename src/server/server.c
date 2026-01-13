@@ -144,6 +144,9 @@ void server_handle_line(client_session_t *session, const char *line) {
         case CMD_REVOKE_ROLE:
             handle_revoke_role(session, &req);
             break;
+        case CMD_LIST_USERS:
+            handle_list_users(session, &req);
+            break;
         case CMD_VIEW_BOOKINGS:
             handle_view_bookings(session, &req);
             break;

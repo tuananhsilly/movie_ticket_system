@@ -20,6 +20,7 @@ void handle_cancel_show(client_session_t *session, const request_t *req);
 void handle_create_user(client_session_t *session, const request_t *req);
 void handle_grant_role(client_session_t *session, const request_t *req);
 void handle_revoke_role(client_session_t *session, const request_t *req);
+void handle_list_users(client_session_t *session, const request_t *req);
 
 void handle_view_bookings(client_session_t *session, const request_t *req);
 void handle_cancel_booking(client_session_t *session, const request_t *req);

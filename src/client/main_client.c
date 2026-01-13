@@ -323,10 +323,11 @@ static void menu_manager_admin(){
     printf("5. CANCEL_SHOW\n");
     printf("6. LIST_SHOW\n");
     printf("7. GET_SEATS\n");
-    printf("8. CREATE_USER\n");
-    printf("9. GRANT_ROLE\n");
-    printf("10. REVOKE_ROLE\n");
-    printf("11. QUIT\n");
+    printf("8. LIST_USERS\n");
+    printf("9. CREATE_USER\n");
+    printf("10. GRANT_ROLE\n");
+    printf("11. REVOKE_ROLE\n");
+    printf("12. QUIT\n");
     printf("Choose: ");
 }
 
@@ -661,22 +662,45 @@ int main(int argc, char *argv[]) {
                     }
                 } else if (choice == 4) {
                     // UPDATE_SHOW
-                    char show_id_str[16], date[16], time_str[32];
+                    char show_id_str[16], cinema_id[64], room_id[64], date[16], time_str[32];
+                    
+                    printf("=== Update Show ===\n");
                     
                     printf("Show ID: ");
                     fgets(show_id_str, sizeof(show_id_str), stdin);
                     show_id_str[strcspn(show_id_str, "\r\n")] = '\0';
                     
-                    printf("New date (YYYY-MM-DD): ");
+                    printf("New Cinema ID (or press Enter to keep current): ");
+                    fgets(cinema_id, sizeof(cinema_id), stdin);
+                    cinema_id[strcspn(cinema_id, "\r\n")] = '\0';
+                    
+                    printf("New Room ID (or press Enter to keep current): ");
+                    fgets(room_id, sizeof(room_id), stdin);
+                    room_id[strcspn(room_id, "\r\n")] = '\0';
+                    
+                    printf("New date (YYYY-MM-DD, or press Enter to keep current): ");
                     fgets(date, sizeof(date), stdin);
                     date[strcspn(date, "\r\n")] = '\0';
                     
-                    printf("New time (HH:MM-HH:MM): ");
+                    printf("New time (HH:MM-HH:MM, or press Enter to keep current): ");
                     fgets(time_str, sizeof(time_str), stdin);
                     time_str[strcspn(time_str, "\r\n")] = '\0';
                     
-                    snprintf(line, sizeof(line), "UPDATE_SHOW %s %s %s\n", 
-                            show_id_str, date, time_str);
+                    // Replace spaces with underscores
+                    for (int i = 0; cinema_id[i]; i++) {
+                        if (cinema_id[i] == ' ') cinema_id[i] = '_';
+                    }
+                    for (int i = 0; room_id[i]; i++) {
+                        if (room_id[i] == ' ') room_id[i] = '_';
+                    }
+                    
+                    // Use "-" as placeholder for empty fields (keep current)
+                    snprintf(line, sizeof(line), "UPDATE_SHOW %s %s %s %s %s\n", 
+                            show_id_str,
+                            strlen(cinema_id) > 0 ? cinema_id : "-",
+                            strlen(room_id) > 0 ? room_id : "-",
+                            strlen(date) > 0 ? date : "-",
+                            strlen(time_str) > 0 ? time_str : "-");
                     client_send_line(sockfd, line);
                     
                     if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
@@ -910,6 +934,62 @@ int main(int argc, char *argv[]) {
                         printf("\n");
                     }
                 } else if (choice == 8) {
+                    // LIST_USERS
+                    snprintf(line, sizeof(line), "LIST_USERS\n");
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    
+                    char *trimmed_resp = resp;
+                    while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                    size_t len = strlen(trimmed_resp);
+                    while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                       trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                        trimmed_resp[--len] = '\0';
+                    }
+                    
+                    if (strncmp(trimmed_resp, "ERR LIST_USERS", 14) == 0) {
+                        if (strstr(trimmed_resp, "NO_PERMISSION") != NULL) {
+                            printf("✗ Permission denied: Only Admin can view user list.\n");
+                        } else {
+                            printf("✗ Failed to list users.\n");
+                        }
+                        continue;
+                    }
+                    
+                    if (strstr(trimmed_resp, "OK LIST_USERS FOUND") != NULL) {
+                        int user_count = 0;
+                        sscanf(trimmed_resp, "OK LIST_USERS FOUND %d", &user_count);
+                        
+                        printf("\n=== User List (%d users) ===\n", user_count);
+                        printf("%-6s %-20s %-30s\n", "ID", "Username", "Roles");
+                        printf("----------------------------------------------------------\n");
+                        
+                        while (1) {
+                            if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                                printf("Server closed connection\n");
+                                break;
+                            }
+                            
+                            if (strncmp(resp, "END", 3) == 0) {
+                                break;
+                            }
+                            
+                            // Parse: USER <id> <username> <roles_string>
+                            unsigned int user_id;
+                            char username[64], roles[128] = "";
+                            
+                            if (sscanf(resp, "USER %u %63s %127s", &user_id, username, roles) >= 2) {
+                                printf("%-6u %-20s %-30s\n", user_id, username, roles);
+                            }
+                        }
+                        printf("----------------------------------------------------------\n\n");
+                    }
+                    
+                } else if (choice == 9) {
                     // CREATE_USER
                     char new_username[64], new_password[64];
                     
@@ -932,8 +1012,8 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 9) {
-                    // GRANT_ROLE_MANAGER
+                } else if (choice == 10) {
+                    // GRANT_ROLE
                     char target_username[64], role[32];
                     
                     printf("Username: ");
@@ -955,7 +1035,7 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 10) {
+                } else if (choice == 11) {
                     // REVOKE_ROLE
                     char target_username[64], role[32];
                     
@@ -978,7 +1058,7 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 11) {
+                } else if (choice == 12) {
                     // QUIT
                 } else {
                     printf("Invalid choice.\n");

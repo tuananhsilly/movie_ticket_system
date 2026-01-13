@@ -38,6 +38,14 @@ int db_find_user(const char *username, char *out_password, int pw_size, uint32_t
  
  uint32_t db_get_user_id_by_username(const char *username);
 
+ /**
+  * Get all users from database.
+  * users: array to store results
+  * max_users: max size of array
+  * Returns number of users found.
+  */
+ int db_get_all_users(User *users, int max_users);
+
  //MOVIE FUNCTIONS
  int db_load_movies(const char *movies_path);
 
@@ -197,6 +205,14 @@ int db_cancel_booking(uint32_t booking_id, uint32_t user_id);
 //UPDATE SHOW FUNCTIONS
 int db_update_show_date_time(uint32_t show_id, const char *new_date, 
     const char *start_time, const char *end_time);
+
+/**
+ * Update show with optional fields (NULL to keep current value).
+ * cinema_id, room_id, date, start_time, end_time: new values or NULL to keep current
+ * Returns 0 on success, -1 on error.
+ */
+int db_update_show(uint32_t show_id, const char *new_cinema_id, const char *new_room_id,
+                   const char *new_date, const char *start_time, const char *end_time);
 
 /**
 * Check if a show has any confirmed bookings.

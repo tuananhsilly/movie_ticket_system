@@ -158,6 +158,45 @@ uint32_t db_get_user_id_by_username(const char *username) {
     return 0;
 }
 
+int db_get_all_users(User *users, int max_users) {
+    FILE *f = fopen(g_users_path, "r");
+    if (!f) return 0;
+    
+    char line[256];
+    // Skip header
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        return 0;
+    }
+    
+    int count = 0;
+    while (fgets(line, sizeof(line), f) && count < max_users) {
+        // id,username,password,roles
+        char line_copy[256];
+        strncpy(line_copy, line, sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+        
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+        char *user_str = strtok_r(NULL, ",", &saveptr);
+        char *pass_str = strtok_r(NULL, ",", &saveptr);
+        char *roles_str = strtok_r(NULL, ",\r\n", &saveptr);
+        
+        if (!id_str || !user_str || !pass_str || !roles_str) continue;
+        
+        users[count].id = (uint32_t)atoi(id_str);
+        strncpy(users[count].username, user_str, sizeof(users[count].username) - 1);
+        users[count].username[sizeof(users[count].username) - 1] = '\0';
+        strncpy(users[count].password, pass_str, sizeof(users[count].password) - 1);
+        users[count].password[sizeof(users[count].password) - 1] = '\0';
+        users[count].roles = (uint32_t)atoi(roles_str);
+        count++;
+    }
+    
+    fclose(f);
+    return count;
+}
+
 int db_add_user(const char *username, const char *password, uint32_t roles) {
     char pw_buf[PASSWORD_MAX_LEN];
 
@@ -1285,6 +1324,89 @@ fprintf(f, "%s", lines[i]);
 fclose(f);
 
 return 0;
+}
+
+int db_update_show(uint32_t show_id, const char *new_cinema_id, const char *new_room_id,
+                   const char *new_date, const char *start_time, const char *end_time) {
+    // 1. Tìm show trong in-memory array
+    Show *show = db_find_show_by_id(show_id);
+    if (!show) {
+        return -1; // Show không tồn tại
+    }
+
+    // 2. Update in-memory array (only if provided)
+    if (new_cinema_id && strlen(new_cinema_id) > 0) {
+        strncpy(show->cinema_id, new_cinema_id, sizeof(show->cinema_id) - 1);
+        show->cinema_id[sizeof(show->cinema_id) - 1] = '\0';
+    }
+    
+    if (new_room_id && strlen(new_room_id) > 0) {
+        strncpy(show->room_id, new_room_id, sizeof(show->room_id) - 1);
+        show->room_id[sizeof(show->room_id) - 1] = '\0';
+    }
+    
+    if (new_date && strlen(new_date) > 0) {
+        strncpy(show->date, new_date, sizeof(show->date) - 1);
+        show->date[sizeof(show->date) - 1] = '\0';
+    }
+    
+    if (start_time && strlen(start_time) > 0) {
+        strncpy(show->start_time, start_time, sizeof(show->start_time) - 1);
+        show->start_time[sizeof(show->start_time) - 1] = '\0';
+    }
+    
+    if (end_time && strlen(end_time) > 0) {
+        strncpy(show->end_time, end_time, sizeof(show->end_time) - 1);
+        show->end_time[sizeof(show->end_time) - 1] = '\0';
+    }
+
+    // 3. Update CSV file
+    FILE *f = fopen("data/shows.csv", "r");
+    if (!f) return -1;
+
+    char lines[2048][512];
+    int line_count = 0;
+    int found = 0;
+
+    if (!fgets(lines[line_count++], sizeof(lines[0]), f)) {
+        fclose(f);
+        return -1;
+    }
+
+    while (fgets(lines[line_count], sizeof(lines[0]), f) && line_count < 2048) {
+        char line_copy[512];
+        strncpy(line_copy, lines[line_count], sizeof(line_copy) - 1);
+        line_copy[sizeof(line_copy) - 1] = '\0';
+
+        char *saveptr;
+        char *id_str = strtok_r(line_copy, ",", &saveptr);
+
+        if (id_str) {
+            uint32_t id = (uint32_t)atoi(id_str);
+            if (id == show_id) {
+                // Format: id,movie_id,cinema_id,room_id,date,start_time,end_time
+                snprintf(lines[line_count], sizeof(lines[0]), 
+                         "%u,%u,%s,%s,%s,%s,%s\n", 
+                         show->id, show->movie_id, show->cinema_id, show->room_id, 
+                         show->date, show->start_time, show->end_time);
+                found = 1;
+            }
+        }
+        line_count++;
+    }
+    fclose(f);
+
+    if (!found) return -1;
+
+    f = fopen("data/shows.csv", "w");
+    if (!f) return -1;
+
+    for (int i = 0; i < line_count; i++) {
+        fprintf(f, "%s", lines[i]);
+    }
+    fclose(f);
+
+    return 0;
 }
 
 int db_has_show_bookings(uint32_t show_id) {

@@ -21,6 +21,7 @@ static command_t command_from_string(const char *cmd) {
     if (strcmp(cmd, "REVOKE_ROLE") == 0) return CMD_REVOKE_ROLE;
     if (strcmp(cmd, "VIEW_BOOKINGS") == 0) return CMD_VIEW_BOOKINGS;
     if (strcmp(cmd, "CANCEL_BOOKING") == 0) return CMD_CANCEL_BOOKING;
+    if (strcmp(cmd, "LIST_USERS") == 0) return CMD_LIST_USERS;
     return CMD_UNKNOWN;
 }
 

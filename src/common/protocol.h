@@ -22,6 +22,7 @@ typedef enum {
     CMD_REVOKE_ROLE,
     CMD_VIEW_BOOKINGS,
     CMD_CANCEL_BOOKING,
+    CMD_LIST_USERS,
     CMD_QUIT
 } command_t;
 

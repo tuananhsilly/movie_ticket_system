@@ -211,3 +211,62 @@ void handle_revoke_role(client_session_t *session, const request_t *req) {
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
 }
+
+void handle_list_users(client_session_t *session, const request_t *req) {
+    (void)req; // unused
+    char resp[512];
+    
+    // 1. Check logged in
+    if (session->state != SESSION_STATE_LOGGED_IN) {
+        snprintf(resp, sizeof(resp),
+                 "ERR LIST_USERS NOT_AUTHENTICATED Please_login_first\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 2. Check role - only ADMIN can view user list
+    if (!(session->roles & ROLE_ADMIN)) {
+        snprintf(resp, sizeof(resp),
+                 "ERR LIST_USERS NO_PERMISSION Only_admin_can_view_users\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 3. Get all users
+    User users[100];
+    int count = db_get_all_users(users, 100);
+    
+    if (count <= 0) {
+        snprintf(resp, sizeof(resp), "OK LIST_USERS EMPTY 0\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        
+        snprintf(resp, sizeof(resp), "END\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    // 4. Send header
+    snprintf(resp, sizeof(resp), "OK LIST_USERS FOUND %d\n", count);
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+    
+    // 5. Send each user
+    for (int i = 0; i < count; i++) {
+        char role_str[64];
+        roles_to_string(users[i].roles, role_str, sizeof(role_str));
+        
+        snprintf(resp, sizeof(resp), "USER %u %s %s\n",
+                 users[i].id, users[i].username, role_str);
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+    }
+    
+    // 6. Send END
+    snprintf(resp, sizeof(resp), "END\n");
+    send_line(session->sockfd, resp);
+    log_msg("SEND", session->sockfd, resp);
+}

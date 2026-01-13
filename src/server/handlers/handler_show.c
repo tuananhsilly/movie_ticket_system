@@ -405,11 +405,11 @@ void handle_update_show(client_session_t *session, const request_t *req) {
         return;
     }
     
-    // 3. Kiểm tra args: UPDATE_SHOW <show_id> <new_date> <new_time>
-    // new_time format: "HH:MM-HH:MM"
-    if (req->argc < 3) {
+    // 3. Kiểm tra args: UPDATE_SHOW <show_id> <cinema_id> <room_id> <date> <time>
+    // Use "-" as placeholder for "keep current"
+    if (req->argc < 5) {
         snprintf(resp, sizeof(resp),
-                 "ERR UPDATE_SHOW INVALID_ARGS Need_show_id_date_and_time\n");
+                 "ERR UPDATE_SHOW INVALID_ARGS Need_show_id_cinema_room_date_time\n");
         send_line(session->sockfd, resp);
         log_msg("SEND", session->sockfd, resp);
         return;
@@ -417,8 +417,10 @@ void handle_update_show(client_session_t *session, const request_t *req) {
     
     // 4. Parse arguments
     uint32_t show_id = (uint32_t)atoi(req->args[0]);
-    const char *new_date = req->args[1];
-    const char *time_str = req->args[2]; // Format: "HH:MM-HH:MM"
+    const char *new_cinema_id = req->args[1];
+    const char *new_room_id = req->args[2];
+    const char *new_date = req->args[3];
+    const char *time_str = req->args[4]; // Format: "HH:MM-HH:MM" or "-"
     
     // 5. Validate show_id
     if (show_id == 0) {
@@ -429,38 +431,7 @@ void handle_update_show(client_session_t *session, const request_t *req) {
         return;
     }
     
-    // 6. Parse time string "HH:MM-HH:MM" thành start_time và end_time
-    char start_time[16] = {0};
-    char end_time[16] = {0};
-    char time_copy[32];
-    strncpy(time_copy, time_str, sizeof(time_copy) - 1);
-    time_copy[sizeof(time_copy) - 1] = '\0';
-    
-    char *dash = strchr(time_copy, '-');
-    if (!dash) {
-        snprintf(resp, sizeof(resp),
-                 "ERR UPDATE_SHOW INVALID_ARGS Time_format_must_be_HH:MM-HH:MM\n");
-        send_line(session->sockfd, resp);
-        log_msg("SEND", session->sockfd, resp);
-        return;
-    }
-    
-    *dash = '\0';
-    strncpy(start_time, time_copy, sizeof(start_time) - 1);
-    start_time[sizeof(start_time) - 1] = '\0';
-    strncpy(end_time, dash + 1, sizeof(end_time) - 1);
-    end_time[sizeof(end_time) - 1] = '\0';
-    
-    // 7. Validate date và time không rỗng
-    if (strlen(new_date) == 0 || strlen(start_time) == 0 || strlen(end_time) == 0) {
-        snprintf(resp, sizeof(resp),
-                 "ERR UPDATE_SHOW INVALID_ARGS Date_and_time_cannot_be_empty\n");
-        send_line(session->sockfd, resp);
-        log_msg("SEND", session->sockfd, resp);
-        return;
-    }
-    
-    // 8. Kiểm tra show có tồn tại không
+    // 6. Kiểm tra show có tồn tại không
     Show *show = db_find_show_by_id(show_id);
     if (!show) {
         snprintf(resp, sizeof(resp),
@@ -470,12 +441,40 @@ void handle_update_show(client_session_t *session, const request_t *req) {
         return;
     }
     
-    // 9. Update show trong database
-    int ret = db_update_show_date_time(show_id, new_date, start_time, end_time);
+    // 7. Parse time string if provided (not "-")
+    char start_time[16] = {0};
+    char end_time[16] = {0};
+    
+    if (strcmp(time_str, "-") != 0 && strlen(time_str) > 0) {
+        char time_copy[32];
+        strncpy(time_copy, time_str, sizeof(time_copy) - 1);
+        time_copy[sizeof(time_copy) - 1] = '\0';
+        
+        char *dash = strchr(time_copy, '-');
+        if (!dash) {
+            snprintf(resp, sizeof(resp),
+                     "ERR UPDATE_SHOW INVALID_ARGS Time_format_must_be_HH:MM-HH:MM\n");
+            send_line(session->sockfd, resp);
+            log_msg("SEND", session->sockfd, resp);
+            return;
+        }
+        
+        *dash = '\0';
+        strncpy(start_time, time_copy, sizeof(start_time) - 1);
+        strncpy(end_time, dash + 1, sizeof(end_time) - 1);
+    }
+    
+    // 8. Update show trong database
+    int ret = db_update_show(show_id, 
+                             strcmp(new_cinema_id, "-") != 0 ? new_cinema_id : NULL,
+                             strcmp(new_room_id, "-") != 0 ? new_room_id : NULL,
+                             strcmp(new_date, "-") != 0 ? new_date : NULL,
+                             strlen(start_time) > 0 ? start_time : NULL,
+                             strlen(end_time) > 0 ? end_time : NULL);
     
     if (ret == 0) {
         snprintf(resp, sizeof(resp),
-                 "OK UPDATE_SHOW UPDATED\n");
+                 "OK UPDATE_SHOW UPDATED %u\n", show_id);
     } else {
         snprintf(resp, sizeof(resp),
                  "ERR UPDATE_SHOW INTERNAL_ERROR Failed_to_update_show\n");

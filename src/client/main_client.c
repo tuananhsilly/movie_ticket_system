@@ -316,14 +316,17 @@ static void menu_not_logged_in() {
 
 static void menu_manager_admin(){
     printf("=== Movie Ticket Client(Manager/Admin) ===\n");
-    printf("1. ADD_MOVIE\n");
-    printf("2. ADD_SHOW\n");
-    printf("3. UPDATE_SHOW\n");
-    printf("4. CANCEL_SHOW\n");
-    printf("5. CREATE_USER\n");
-    printf("6. GRANT_ROLE\n");
-    printf("7. REVOKE_ROLE\n");
-    printf("8. QUIT\n");
+    printf("1. LIST_MOVIE\n");
+    printf("2. ADD_MOVIE\n");
+    printf("3. ADD_SHOW\n");
+    printf("4. UPDATE_SHOW\n");
+    printf("5. CANCEL_SHOW\n");
+    printf("6. LIST_SHOW\n");
+    printf("7. GET_SEATS\n");
+    printf("8. CREATE_USER\n");
+    printf("9. GRANT_ROLE\n");
+    printf("10. REVOKE_ROLE\n");
+    printf("11. QUIT\n");
     printf("Choose: ");
 }
 
@@ -456,6 +459,83 @@ int main(int argc, char *argv[]) {
             if (client_roles & (ROLE_MANAGER | ROLE_ADMIN)) {
                 // Menu manager/admin
                 if (choice == 1) {
+                    // LIST_MOVIE
+                    char param[128] = "";
+                    
+                    printf("Filter type (title/genre/cinema/timeslot, or leave empty for all): ");
+                    fgets(param, sizeof(param), stdin);
+                    param[strcspn(param, "\r\n")] = '\0';
+                    
+                    // Gửi: LIST_MOVIE <FILTER> [value]
+                    snprintf(line, sizeof(line), "LIST_MOVIE %s\n", param);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    
+                    char *trimmed_resp = resp;
+                    while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                    size_t len = strlen(trimmed_resp);
+                    while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                       trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                        trimmed_resp[--len] = '\0';
+                    }
+                    
+                    if (strncmp(trimmed_resp, "ERR LIST_MOVIE", 14) == 0) {
+                        printf("✗ Failed to list movies.\n");
+                        continue;
+                    }
+                    
+                    if (strstr(trimmed_resp, "OK LIST_MOVIE EMPTY") != NULL) {
+                        if (client_recv_line(sockfd, resp, sizeof(resp)) > 0) {
+                            // Consume END
+                        }
+                        printf("No movies found.\n");
+                        continue;
+                    }
+                    
+                    if (strstr(trimmed_resp, "OK LIST_MOVIE FOUND") != NULL) {
+                        int movie_count = 0;
+                        sscanf(trimmed_resp, "OK LIST_MOVIE FOUND %d", &movie_count);
+                        
+                        printf("\n=== Found %d movie(s) ===\n", movie_count);
+                        printf("%-6s %-30s %-15s %-5s %-40s\n", "ID", "Title", "Genre", "Min", "Description");
+                        printf("---------------------------------------------------------------------------------------------------\n");
+                        
+                        while (1) {
+                            if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                                printf("Server closed connection\n");
+                                break;
+                            }
+                            
+                            if (strncmp(resp, "END", 3) == 0) {
+                                break;
+                            }
+                            
+                            unsigned int movie_id;
+                            char title[128], genre[64], desc[256] = "";
+                            int duration;
+                            
+                            if (sscanf(resp, "MOVIE %u %127s %63s %d %255[^\n]", 
+                                       &movie_id, title, genre, &duration, desc) >= 4) {
+                                for (int i = 0; title[i]; i++) {
+                                    if (title[i] == '_') title[i] = ' ';
+                                }
+                                for (int i = 0; genre[i]; i++) {
+                                    if (genre[i] == '_') genre[i] = ' ';
+                                }
+                                for (int i = 0; desc[i]; i++) {
+                                    if (desc[i] == '_') desc[i] = ' ';
+                                }
+                                printf("%-6u %-30.30s %-15s %-5d %.40s\n", 
+                                       movie_id, title, genre, duration, desc);
+                            }
+                        }
+                        printf("---------------------------------------------------------------------------------------------------\n\n");
+                    }
+                } else if (choice == 3) {
                     // ADD_MOVIE
                     char title[128], genre[64], description[512];
                     int duration_min;
@@ -600,7 +680,211 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                 } else if (choice == 5) {
-                    // CREATE_USER  
+                    // LIST_SHOW - Admin/Manager view all shows
+                    char movie_id_str[16] = "";
+                    char date_str[16] = "";
+                    
+                    printf("Movie ID (leave empty to view all shows): ");
+                    fgets(movie_id_str, sizeof(movie_id_str), stdin);
+                    movie_id_str[strcspn(movie_id_str, "\r\n")] = '\0';
+                    
+                    printf("Date (YYYY-MM-DD, optional, press Enter to skip): ");
+                    fgets(date_str, sizeof(date_str), stdin);
+                    date_str[strcspn(date_str, "\r\n")] = '\0';
+                    
+                    // Gửi request LIST_SHOW
+                    if (strlen(movie_id_str) > 0) {
+                        if (strlen(date_str) > 0) {
+                            snprintf(line, sizeof(line), "LIST_SHOW %s %s\n", movie_id_str, date_str);
+                        } else {
+                            snprintf(line, sizeof(line), "LIST_SHOW %s\n", movie_id_str);
+                        }
+                    } else {
+                        snprintf(line, sizeof(line), "LIST_SHOW\n");
+                    }
+                    client_send_line(sockfd, line);
+                
+                    // Đọc dòng đầu tiên
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                
+                    // Trim response
+                    char *trimmed_resp = resp;
+                    while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                    size_t len = strlen(trimmed_resp);
+                    while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                       trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                        trimmed_resp[--len] = '\0';
+                    }
+                
+                    // Handle errors friendly
+                    if (strncmp(trimmed_resp, "ERR LIST_SHOW", 13) == 0) {
+                        if (strstr(trimmed_resp, "NOT_AUTHENTICATED") != NULL) {
+                            printf("✗ Please login first.\n");
+                            logged_in = 0;
+                            continue;
+                        } else {
+                            printf("✗ Failed to list shows.\n");
+                            continue;
+                        }
+                    }
+                    
+                    // Không có suất chiếu
+                    if (strstr(trimmed_resp, "OK LIST_SHOW EMPTY") != NULL) {
+                        if (client_recv_line(sockfd, resp, sizeof(resp)) > 0) {
+                            // Consume END
+                        }
+                        printf("No shows found.\n");
+                        continue;
+                    }
+                    
+                    // Có suất chiếu: FOUND N
+                    if (strstr(trimmed_resp, "OK LIST_SHOW FOUND") != NULL) {
+                        int show_count = 0;
+                        sscanf(trimmed_resp, "OK LIST_SHOW FOUND %d", &show_count);
+                        
+                        printf("\n=== Found %d show(s) ===\n", show_count);
+                        printf("%-8s %-10s %-12s %-12s %-12s %-8s\n", "Show ID", "Movie ID", "Cinema", "Room", "Date", "Time");
+                        printf("-----------------------------------------------------------------------------------\n");
+                        
+                        while (1) {
+                            if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                                printf("Server closed connection\n");
+                                break;
+                            }
+                            
+                            if (strncmp(resp, "END", 3) == 0) {
+                                break;
+                            }
+                            
+                            unsigned int show_id, movie_id;
+                            char cinema_id[64];
+                            char room_id[64];
+                            char date[16];
+                            char time[16];
+                            
+                            if (sscanf(resp, "SHOW %u %u %63s %63s %15s %15s", 
+                                       &show_id, &movie_id, cinema_id, room_id, date, time) == 6) {
+                                for (int i = 0; cinema_id[i]; i++) {
+                                    if (cinema_id[i] == '_') cinema_id[i] = ' ';
+                                }
+                                for (int i = 0; room_id[i]; i++) {
+                                    if (room_id[i] == '_') room_id[i] = ' ';
+                                }
+                                printf("%-8u %-10u %-12s %-12s %-12s %-8s\n", 
+                                       show_id, movie_id, cinema_id, room_id, date, time);
+                            }
+                            fflush(stdout);
+                        }
+                        printf("-----------------------------------------------------------------------------------\n\n");
+                    }
+                } else if (choice == 6) {
+                    // GET_SEATS
+                    char show_id_str[16];
+                    
+                    printf("Show ID: ");
+                    fgets(show_id_str, sizeof(show_id_str), stdin);
+                    show_id_str[strcspn(show_id_str, "\r\n")] = '\0';
+                    
+                    snprintf(line, sizeof(line), "GET_SEATS %s\n", show_id_str);
+                    client_send_line(sockfd, line);
+                
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                
+                    char *trimmed_resp = resp;
+                    while (*trimmed_resp == ' ' || *trimmed_resp == '\t') trimmed_resp++;
+                    size_t len = strlen(trimmed_resp);
+                    while (len > 0 && (trimmed_resp[len-1] == ' ' || trimmed_resp[len-1] == '\t' || 
+                                       trimmed_resp[len-1] == '\r' || trimmed_resp[len-1] == '\n')) {
+                        trimmed_resp[--len] = '\0';
+                    }
+                
+                    if (strncmp(trimmed_resp, "ERR GET_SEATS", 13) == 0) {
+                        if (strstr(trimmed_resp, "NOT_AUTHENTICATED") != NULL) {
+                            printf("✗ Please login first.\n");
+                            logged_in = 0;
+                            continue;
+                        } else if (strstr(trimmed_resp, "SHOW_NOT_FOUND") != NULL) {
+                            printf("✗ Show not found.\n");
+                            continue;
+                        } else {
+                            printf("✗ Failed to get seat map.\n");
+                            continue;
+                        }
+                    }
+                    
+                    if (strstr(trimmed_resp, "OK GET_SEATS") != NULL) {
+                        unsigned int show_id, movie_id = 0;
+                        int rows, cols;
+                        if (sscanf(trimmed_resp, "OK GET_SEATS %u %d %d %u", &show_id, &rows, &cols, &movie_id) >= 3) {
+                            if (movie_id > 0) {
+                                printf("\n=== Seat Map for Show %u (Movie: %u, %dx%d) ===\n", show_id, movie_id, rows, cols);
+                            } else {
+                                printf("\n=== Seat Map for Show %u (%dx%d) ===\n", show_id, rows, cols);
+                            }
+                        }
+                        
+                        char seat_map[20][20];
+                        for (int r = 0; r < rows; r++) {
+                            for (int c = 0; c < cols; c++) {
+                                seat_map[r][c] = '?';
+                            }
+                        }
+                        
+                        while (1) {
+                            if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                                printf("Server closed connection\n");
+                                break;
+                            }
+                            
+                            if (strncmp(resp, "END", 3) == 0) {
+                                break;
+                            }
+                            
+                            int row, col;
+                            char status[16];
+                            if (sscanf(resp, "SEAT %d %d %15s", &row, &col, status) == 3) {
+                                if (row >= 1 && row <= rows && col >= 1 && col <= cols) {
+                                    if (strcmp(status, "FREE") == 0) {
+                                        seat_map[row - 1][col - 1] = 'O';
+                                    } else if (strcmp(status, "BOOKED") == 0) {
+                                        seat_map[row - 1][col - 1] = 'X';
+                                    } else if (strcmp(status, "HELD") == 0) {
+                                        seat_map[row - 1][col - 1] = 'H';
+                                    } else {
+                                        seat_map[row - 1][col - 1] = '?';
+                                    }
+                                }
+                            }
+                        }
+                        
+                        printf("\nSeat Layout (O=Free, X=Booked, H=Held):\n");
+                        printf("   ");
+                        for (int c = 1; c <= cols; c++) printf("%3d", c);
+                        printf("\n");
+                        
+                        for (int r = 0; r < rows; r++) {
+                            char row_label[4];
+                            if (r + 1 <= 26) {
+                                snprintf(row_label, sizeof(row_label), "%c", 'A' + r);
+                            } else {
+                                snprintf(row_label, sizeof(row_label), "%c%c", 'A' + r / 26 - 1, 'A' + r % 26);
+                            }
+                            printf("%2s |", row_label);
+                            for (int c = 0; c < cols; c++) {
+                                printf("%3c", seat_map[r][c]);
+                            }
+                            printf("|\n");
+                        }
+                        printf("\n");
+                    }
+                } else if (choice == 9) {
+                    // CREATE_USER
                     char new_username[64], new_password[64];
                     
                     printf("New username: ");
@@ -622,7 +906,30 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 6) {
+                } else if (choice == 9) {
+                    // CREATE_USER
+                    char target_username[64], role[32];
+                    
+                    printf("Username: ");
+                    fgets(target_username, sizeof(target_username), stdin);
+                    target_username[strcspn(target_username, "\r\n")] = '\0';
+                    
+                    printf("Role (CUSTOMER/MANAGER/ADMIN): ");
+                    fgets(role, sizeof(role), stdin);
+                    role[strcspn(role, "\r\n")] = '\0';
+                    
+                    snprintf(line, sizeof(line), "GRANT_ROLE %s %s\n", target_username, role);
+                    client_send_line(sockfd, line);
+                    
+                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
+                        printf("Server closed connection\n");
+                        break;
+                    }
+                    if (!print_friendly_message(resp)) {
+                        printf("SERVER: %s", resp);
+                    }
+                    
+                } else if (choice == 10) {
                     // GRANT_ROLE
                     char target_username[64], role[32];
                     
@@ -645,7 +952,7 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 7) {
+                } else if (choice == 11) {
                     // REVOKE_ROLE
                     char target_username[64], role[32];
                     
@@ -668,11 +975,8 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 8) {
+                } else if (choice == 12) {
                     // QUIT
-                    snprintf(line, sizeof(line), "QUIT\n");
-                    client_send_line(sockfd, line);
-                    break;
                 } else {
                     printf("Invalid choice.\n");
                 }
@@ -901,10 +1205,10 @@ int main(int argc, char *argv[]) {
                 }
             } else if (choice == 3) {
                 // LIST_SHOW
-                char movie_id_str[16];
+                char movie_id_str[16] = "";
                 char date_str[16] = "";
                 
-                printf("Movie ID: ");
+                printf("Movie ID (leave empty if you are ADMIN/MANAGER to view all shows): ");
                 fgets(movie_id_str, sizeof(movie_id_str), stdin);
                 movie_id_str[strcspn(movie_id_str, "\r\n")] = '\0';
                 
@@ -913,10 +1217,16 @@ int main(int argc, char *argv[]) {
                 date_str[strcspn(date_str, "\r\n")] = '\0';
                 
                 // Gửi request LIST_SHOW
-                if (strlen(date_str) > 0) {
-                    snprintf(line, sizeof(line), "LIST_SHOW %s %s\n", movie_id_str, date_str);
+                if (strlen(movie_id_str) > 0) {
+                    // Customer: movie_id là bắt buộc
+                    if (strlen(date_str) > 0) {
+                        snprintf(line, sizeof(line), "LIST_SHOW %s %s\n", movie_id_str, date_str);
+                    } else {
+                        snprintf(line, sizeof(line), "LIST_SHOW %s\n", movie_id_str);
+                    }
                 } else {
-                    snprintf(line, sizeof(line), "LIST_SHOW %s\n", movie_id_str);
+                    // Admin/Manager: không cần movie_id, gửi lệnh trống
+                    snprintf(line, sizeof(line), "LIST_SHOW\n");
                 }
                 client_send_line(sockfd, line);
             
@@ -956,7 +1266,7 @@ int main(int argc, char *argv[]) {
                     if (client_recv_line(sockfd, resp, sizeof(resp)) > 0) {
                         // Silently consume END
                     }
-                    printf("No shows found for this movie.\n");
+                    printf("No shows found.\n");
                     continue;
                 }
                 
@@ -967,8 +1277,8 @@ int main(int argc, char *argv[]) {
                     sscanf(trimmed_resp, "OK LIST_SHOW FOUND %d", &show_count);
                     
                     printf("\n=== Found %d show(s) ===\n", show_count);
-                    printf("%-8s %-12s %-12s %-12s %-8s\n", "Show ID", "Cinema", "Room", "Date", "Time");
-                    printf("------------------------------------------------------------\n");
+                    printf("%-8s %-10s %-12s %-12s %-12s %-8s\n", "Show ID", "Movie ID", "Cinema", "Room", "Date", "Time");
+                    printf("-----------------------------------------------------------------------------------\n");
                     
                     // Đọc và hiển thị tất cả SHOW lines
                     while (1) {
@@ -982,15 +1292,15 @@ int main(int argc, char *argv[]) {
                             break; // Don't print END
                         }
                         
-                        // Parse SHOW line: SHOW <id> <cinema_id> <room_id> <date> <time>
-                        unsigned int show_id;
+                        // Parse SHOW line: SHOW <id> <movie_id> <cinema_id> <room_id> <date> <time>
+                        unsigned int show_id, movie_id;
                         char cinema_id[64];
                         char room_id[64];
                         char date[16];
                         char time[16];
                         
-                        if (sscanf(resp, "SHOW %u %63s %63s %15s %15s", 
-                                   &show_id, cinema_id, room_id, date, time) == 5) {
+                        if (sscanf(resp, "SHOW %u %u %63s %63s %15s %15s", 
+                                   &show_id, &movie_id, cinema_id, room_id, date, time) == 6) {
                             // Replace underscores with spaces for display
                             for (int i = 0; cinema_id[i]; i++) {
                                 if (cinema_id[i] == '_') cinema_id[i] = ' ';
@@ -998,12 +1308,12 @@ int main(int argc, char *argv[]) {
                             for (int i = 0; room_id[i]; i++) {
                                 if (room_id[i] == '_') room_id[i] = ' ';
                             }
-                            printf("%-8u %-12s %-12s %-12s %-8s\n", 
-                                   show_id, cinema_id, room_id, date, time);
+                            printf("%-8u %-10u %-12s %-12s %-12s %-8s\n", 
+                                   show_id, movie_id, cinema_id, room_id, date, time);
                         }
                         fflush(stdout);
                     }
-                    printf("------------------------------------------------------------\n\n");
+                    printf("-----------------------------------------------------------------------------------\n\n");
                 }
             } else if (choice == 4) {
                 // GET_SEATS
@@ -1050,12 +1360,16 @@ int main(int argc, char *argv[]) {
                     }
                 }
                 
-                // 3) Thành công: OK GET_SEATS <show_id> <rows> <cols>
+                // 3) Thành công: OK GET_SEATS <show_id> <rows> <cols> [movie_id]
                 if (strstr(trimmed_resp, "OK GET_SEATS") != NULL) {
-                    unsigned int show_id;
+                    unsigned int show_id, movie_id = 0;
                     int rows, cols;
-                    if (sscanf(trimmed_resp, "OK GET_SEATS %u %d %d", &show_id, &rows, &cols) == 3) {
-                        printf("\n=== Seat Map for Show %u (%dx%d) ===\n", show_id, rows, cols);
+                    if (sscanf(trimmed_resp, "OK GET_SEATS %u %d %d %u", &show_id, &rows, &cols, &movie_id) >= 3) {
+                        if (movie_id > 0) {
+                            printf("\n=== Seat Map for Show %u (Movie: %u, %dx%d) ===\n", show_id, movie_id, rows, cols);
+                        } else {
+                            printf("\n=== Seat Map for Show %u (%dx%d) ===\n", show_id, rows, cols);
+                        }
                         
                         // Tạo mảng 2D để lưu seats
                         char seat_map[20][20]; // Max 20x20

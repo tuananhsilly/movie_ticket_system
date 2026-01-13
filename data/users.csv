@@ -6,3 +6,5 @@ id,username,password,roles
 5,123,123,2
 6,1234,1234,1
 7,abcde,123,2
+8,admin123,adminpass123,1
+9,admin_test,pass123,1

@@ -21,36 +21,42 @@ void handle_list_show(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 2. Kiểm tra args - cần ít nhất movie_id
-    if (req->argc < 1) {
-        snprintf(resp, sizeof(resp),
-                 "ERR LIST_SHOW INVALID_ARGS Need_movie_id_[and_optional_date]\n");
-        send_line(session->sockfd, resp);
-        log_msg("SEND", session->sockfd, resp);
-        return;
-    }
-
-    // 3. Parse movie_id
-    uint32_t movie_id = (uint32_t)atoi(req->args[0]);
-    if (movie_id == 0) {
-        snprintf(resp, sizeof(resp),
-                 "ERR LIST_SHOW INVALID_ARGS Invalid_movie_id\n");
-        send_line(session->sockfd, resp);
-        log_msg("SEND", session->sockfd, resp);
-        return;
-    }
-
-    // 4. Parse date (optional)
-    const char *date = NULL;
-    if (req->argc >= 2) {
-        date = req->args[1];
-    }
-
-    // 5. Query shows từ DB
     Show results[100];
-    int found = db_list_shows_by_movie(movie_id, date, results, 100);
+    int found = 0;
+    
+    // 2. Kiểm tra xem user có phải admin/manager không
+    // Nếu là admin/manager và không có args, sẽ lấy toàn bộ shows
+    if ((session->roles & (ROLE_ADMIN | ROLE_MANAGER)) && req->argc == 0) {
+        // Admin/Manager xem toàn bộ shows
+        found = db_get_all_shows(NULL, NULL, results, 100);
+    } else if (req->argc >= 1) {
+        // Customer hoặc có args - lấy shows theo movie_id (và optional date)
+        uint32_t movie_id = (uint32_t)atoi(req->args[0]);
+        if (movie_id == 0) {
+            snprintf(resp, sizeof(resp),
+                     "ERR LIST_SHOW INVALID_ARGS Invalid_movie_id\n");
+            send_line(session->sockfd, resp);
+            log_msg("SEND", session->sockfd, resp);
+            return;
+        }
 
-    // 6. Trả kết quả
+        // Parse date (optional)
+        const char *date = NULL;
+        if (req->argc >= 2) {
+            date = req->args[1];
+        }
+
+        found = db_list_shows_by_movie(movie_id, date, results, 100);
+    } else {
+        // Không có args và không phải admin/manager
+        snprintf(resp, sizeof(resp),
+                 "ERR LIST_SHOW INVALID_ARGS Need_movie_id_or_ADMIN/MANAGER_role\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+
+    // 3. Trả kết quả
     if (found <= 0) {
         // Không có suất chiếu
         snprintf(resp, sizeof(resp),
@@ -64,17 +70,18 @@ void handle_list_show(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 7. Gửi header FOUND
+    // 4. Gửi header FOUND
     snprintf(resp, sizeof(resp),
              "OK LIST_SHOW FOUND %d\n", found);
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
 
-    // 8. Gửi từng dòng SHOW ...
+    // 5. Gửi từng dòng SHOW ...
     for (int i = 0; i < found; i++) {
         snprintf(resp, sizeof(resp),
-                 "SHOW %u %s %s %s %s\n",
+                 "SHOW %u %u %s %s %s %s\n",
                  results[i].id,
+                 results[i].movie_id,
                  results[i].cinema_id,
                  results[i].room_id,
                  results[i].date,
@@ -83,7 +90,7 @@ void handle_list_show(client_session_t *session, const request_t *req) {
         log_msg("SEND", session->sockfd, resp);
     }
 
-    // 9. Gửi END
+    // 6. Gửi END
     snprintf(resp, sizeof(resp), "END\n");
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
@@ -130,7 +137,12 @@ void handle_get_seats(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 5. Lấy seats từ DB
+    // 5. Kiểm tra permissions cho customer (chỉ xem seats của shows ở tương lai hoặc hôm nay)
+    if (!(session->roles & (ROLE_ADMIN | ROLE_MANAGER))) {
+        // Customer role - cần thêm thêm check nếu cần (ngoài phạm vi task này)
+    }
+
+    // 6. Lấy seats từ DB
     Seat seats[200]; // Tối đa 200 ghế (10x20)
     int rows = 0, cols = 0;
     int seat_count = db_get_seats_for_show(show_id, seats, 200, &rows, &cols);
@@ -143,13 +155,13 @@ void handle_get_seats(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 6. Gửi header với rows và cols
+    // 7. Gửi header với rows, cols và movie_id
     snprintf(resp, sizeof(resp),
-             "OK GET_SEATS %u %d %d\n", show_id, rows, cols);
+             "OK GET_SEATS %u %d %d %u\n", show_id, rows, cols, show->movie_id);
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);
 
-    // 7. Gửi từng dòng SEAT ...
+    // 8. Gửi từng dòng SEAT ...
     for (int i = 0; i < seat_count; i++) {
         snprintf(resp, sizeof(resp),
                  "SEAT %d %d %s\n",
@@ -160,7 +172,7 @@ void handle_get_seats(client_session_t *session, const request_t *req) {
         log_msg("SEND", session->sockfd, resp);
     }
 
-    // 8. Gửi END
+    // 9. Gửi END
     snprintf(resp, sizeof(resp), "END\n");
     send_line(session->sockfd, resp);
     log_msg("SEND", session->sockfd, resp);

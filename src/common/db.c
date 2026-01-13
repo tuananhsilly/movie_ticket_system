@@ -271,6 +271,14 @@ int db_search_movies_by_title(const char *keyword, Movie *results, int max_resul
     return count;
 }
 
+int db_get_all_movies(Movie *results, int max_results) {
+    int count = 0;
+    for (int i = 0; i < g_movie_count && count < max_results; i++) {
+        results[count++] = g_movies[i];
+    }
+    return count;
+}
+
 // SHOW FUNCTIONS
 int db_load_shows(const char *shows_path) {
     g_show_count = 0;
@@ -409,6 +417,24 @@ int db_list_shows_by_movie(uint32_t movie_id, const char *date, Show *results, i
         }
         
         // Thêm vào results
+        results[count++] = g_shows[i];
+    }
+    return count;
+}
+
+int db_get_all_shows(const char *date, const char *cinema_id, Show *results, int max_results) {
+    int count = 0;
+    for (int i = 0; i < g_show_count && count < max_results; i++) {
+        // Filter by date if provided
+        if (date != NULL && strcmp(g_shows[i].date, date) != 0) {
+            continue;
+        }
+        
+        // Filter by cinema_id if provided
+        if (cinema_id != NULL && strcmp(g_shows[i].cinema_id, cinema_id) != 0) {
+            continue;
+        }
+        
         results[count++] = g_shows[i];
     }
     return count;

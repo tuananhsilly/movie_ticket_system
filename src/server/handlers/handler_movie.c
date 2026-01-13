@@ -130,8 +130,8 @@ void handle_list_movie(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 2. Kiểm tra role - chỉ CUSTOMER mới được phép
-    if (!(session->roles & ROLE_CUSTOMER)) {
+    // 2. Kiểm tra role - CUSTOMER/ADMIN/MANAGER được phép xem phim
+    if (!(session->roles & (ROLE_CUSTOMER | ROLE_ADMIN | ROLE_MANAGER))) {
         snprintf(resp, sizeof(resp),
                  "ERR LIST_MOVIE NO_PERMISSION Role_not_allowed\n");
         send(session->sockfd, resp, strlen(resp), 0);
@@ -139,45 +139,48 @@ void handle_list_movie(client_session_t *session, const request_t *req) {
         return;
     }
 
-    // 2. Kiểm tra args
-    if (req->argc < 2) {
+    // 3. Kiểm tra args
+    // Nếu không có args, trả về tất cả phim (cho admin/manager dễ quản lý)
+    Movie results[100];
+    int found = 0;
+
+    if (req->argc < 1) {
+        // Không có filter -> trả về tất cả phim
+        found = db_get_all_movies(results, 100);
+    } else if (req->argc < 2) {
         snprintf(resp, sizeof(resp),
                  "ERR LIST_MOVIE INVALID_ARGS Bad_filter\n");
         send(session->sockfd, resp, strlen(resp), 0);
         log_msg("SEND", session->sockfd, resp);
         return;
-    }
+    } else {
+        const char *filter_type = req->args[0];
+        const char *param       = req->args[1];
 
-    const char *filter_type = req->args[0];
-    const char *param       = req->args[1];
-
-    Movie results[100];
-    int found = 0;
-
-    if (strcmp(filter_type, "GENRE") == 0) {
-        found = db_list_movies_by_genre(param, results, 100);
-    } else if (strcmp(filter_type, "CINEMA") == 0) {
-        found = db_list_movies_by_cinema(param, results, 100);
-    } else if (strcmp(filter_type, "TIMESLOT") == 0) {
-        char date[DATE_STR_LEN];
-        char from[TIME_STR_LEN];
-        char to[TIME_STR_LEN];
-        if (parse_timeslot(param, date, sizeof(date), from, sizeof(from), to, sizeof(to)) != 0) {
+        if (strcmp(filter_type, "GENRE") == 0) {
+            found = db_list_movies_by_genre(param, results, 100);
+        } else if (strcmp(filter_type, "CINEMA") == 0) {
+            found = db_list_movies_by_cinema(param, results, 100);
+        } else if (strcmp(filter_type, "TIMESLOT") == 0) {
+            char date[DATE_STR_LEN];
+            char from[TIME_STR_LEN];
+            char to[TIME_STR_LEN];
+            if (parse_timeslot(param, date, sizeof(date), from, sizeof(from), to, sizeof(to)) != 0) {
+                snprintf(resp, sizeof(resp),
+                         "ERR LIST_MOVIE INVALID_ARGS Bad_filter\n");
+                send(session->sockfd, resp, strlen(resp), 0);
+                log_msg("SEND", session->sockfd, resp);
+                return;
+            }
+            found = db_list_movies_by_timeslot(date, from, to, results, 100);
+        } else {
             snprintf(resp, sizeof(resp),
                      "ERR LIST_MOVIE INVALID_ARGS Bad_filter\n");
             send(session->sockfd, resp, strlen(resp), 0);
             log_msg("SEND", session->sockfd, resp);
             return;
         }
-        found = db_list_movies_by_timeslot(date, from, to, results, 100);
-    } else {
-        snprintf(resp, sizeof(resp),
-                 "ERR LIST_MOVIE INVALID_ARGS Bad_filter\n");
-        send(session->sockfd, resp, strlen(resp), 0);
-        log_msg("SEND", session->sockfd, resp);
-        return;
     }
-
     if (found <= 0) {
         snprintf(resp, sizeof(resp),
                  "OK LIST_MOVIE EMPTY 0\n");

@@ -49,6 +49,13 @@ int db_find_user(const char *username, char *out_password, int pw_size, uint32_t
   */
  int db_search_movies_by_title(const char *keyword, Movie *results, int max_results);
 
+ /**
+  * Lấy tất cả phim (dùng cho admin/manager xem danh sách).
+  * results: mảng để trả về
+  * max_results: kích thước mảng
+  * Trả số lượng phim.
+  */
+ int db_get_all_movies(Movie *results, int max_results);
 
  //LIST MOVIE SHOW FUNCTIONS
 
@@ -67,6 +74,14 @@ int db_list_movies_by_timeslot(const char *date, const char *from_time, const ch
 //LIST SHOW FUNCTIONS
 int db_list_shows_by_movie(uint32_t movie_id, const char *date, Show *results, int max_results);
 
+/**
+ * Lấy toàn bộ shows từ database (dùng cho admin/manager).
+ * Optional filtering by date and cinema_id (NULL để bỏ qua).
+ * results: mảng để trả về
+ * max_results: kích thước mảng
+ * Trả số lượng shows tìm được (0..max_results).
+ */
+int db_get_all_shows(const char *date, const char *cinema_id, Show *results, int max_results);
 
 // Find show by id, return pointer to Show struct if found, NULL otherwise
 Show* db_find_show_by_id(uint32_t show_id); 

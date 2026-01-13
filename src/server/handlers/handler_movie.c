@@ -239,10 +239,11 @@ void handle_add_movie(client_session_t *session, const request_t *req) {
         return;
     }
     
-    // 3. Kiểm tra args: ADD_MOVIE <title> <genre> <duration_min> <description>
-    if (req->argc < 4) {
+    // 3. Kiểm tra args: ADD_MOVIE <title> <genre> <duration_min> [description]
+    //    description is OPTIONAL (3 or 4 args)
+    if (req->argc < 3) {
         snprintf(resp, sizeof(resp),
-                 "ERR ADD_MOVIE INVALID_ARGS Need_title_genre_duration_description\n");
+                 "ERR ADD_MOVIE INVALID_ARGS Need_title_genre_duration\n");
         send_line(session->sockfd, resp);
         log_msg("SEND", session->sockfd, resp);
         return;
@@ -251,12 +252,28 @@ void handle_add_movie(client_session_t *session, const request_t *req) {
     const char *title = req->args[0];
     const char *genre = req->args[1];
     int duration_min = atoi(req->args[2]);
-    const char *description = req->args[3];
+    const char *description = (req->argc >= 4) ? req->args[3] : NULL;  // Optional
     
-    // 4. Validate
-    if (strlen(title) == 0 || strlen(genre) == 0 || duration_min <= 0) {
+    // 4. Validate required fields
+    if (strlen(title) == 0) {
         snprintf(resp, sizeof(resp),
-                 "ERR ADD_MOVIE INVALID_ARGS Invalid_title_genre_or_duration\n");
+                 "ERR ADD_MOVIE INVALID_ARGS Title_cannot_be_empty\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    if (strlen(genre) == 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE INVALID_ARGS Genre_cannot_be_empty\n");
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
+        return;
+    }
+    
+    if (duration_min <= 0) {
+        snprintf(resp, sizeof(resp),
+                 "ERR ADD_MOVIE INVALID_ARGS Duration_must_be_positive\n");
         send_line(session->sockfd, resp);
         log_msg("SEND", session->sockfd, resp);
         return;
@@ -269,6 +286,8 @@ void handle_add_movie(client_session_t *session, const request_t *req) {
     if (ret == 0) {
         snprintf(resp, sizeof(resp),
                  "OK ADD_MOVIE CREATED %u\n", movie_id);
+        send_line(session->sockfd, resp);
+        log_msg("SEND", session->sockfd, resp);
     } else {
         snprintf(resp, sizeof(resp),
                  "ERR ADD_MOVIE FAILED Internal_error\n");

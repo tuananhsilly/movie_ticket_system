@@ -501,8 +501,8 @@ int main(int argc, char *argv[]) {
                         sscanf(trimmed_resp, "OK LIST_MOVIE FOUND %d", &movie_count);
                         
                         printf("\n=== Found %d movie(s) ===\n", movie_count);
-                        printf("%-6s %-30s %-15s %-5s \n", "ID", "Title", "Genre", "Duration");
-                        printf("---------------------------------------------------------------------------------------------------\n");
+                        printf("%-6s %-30s %-12s %-6s %-40s\n", "ID", "Title", "Genre", "Min", "Description");
+                        printf("----------------------------------------------------------------------------------------------------\n");
                         
                         while (1) {
                             if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
@@ -518,38 +518,59 @@ int main(int argc, char *argv[]) {
                             char title[128], genre[64], desc[256] = "";
                             int duration;
                             
-                            if (sscanf(resp, "MOVIE %u %127s %63s %d[^\n]", 
-                                       &movie_id, title, genre, &duration) >= 3) {
+                            if (sscanf(resp, "MOVIE %u %127s %63s %d %255s", 
+                                       &movie_id, title, genre, &duration, desc) >= 4) {
                                 for (int i = 0; title[i]; i++) {
                                     if (title[i] == '_') title[i] = ' ';
                                 }
                                 for (int i = 0; genre[i]; i++) {
                                     if (genre[i] == '_') genre[i] = ' ';
                                 }
-                                printf("%-6u %-30.30s %-15s %-5d\n", 
-                                       movie_id, title, genre, duration);
+                                for (int i = 0; desc[i]; i++) {
+                                    if (desc[i] == '_') desc[i] = ' ';
+                                }
+                                printf("%-6u %-30.30s %-12s %-6d %.40s\n", 
+                                       movie_id, title, genre, duration, desc);
                             }
                         }
-                        printf("---------------------------------------------------------------------------------------------------\n\n");
+                        printf("----------------------------------------------------------------------------------------------------\n\n");
                     }
-                } else if (choice == 3) {
+                } else if (choice == 2) {
                     // ADD_MOVIE
                     char title[128], genre[64], description[512];
                     int duration_min;
                     
-                    printf("Title: ");
+                    printf("=== Add New Movie ===\n");
+                    
+                    // Title (required)
+                    printf("Title (*required): ");
                     fgets(title, sizeof(title), stdin);
                     title[strcspn(title, "\r\n")] = '\0';
+                    if (strlen(title) == 0) {
+                        printf("✗ Title cannot be empty.\n");
+                        continue;
+                    }
                     
-                    printf("Genre: ");
+                    // Genre (required)
+                    printf("Genre (*required): ");
                     fgets(genre, sizeof(genre), stdin);
                     genre[strcspn(genre, "\r\n")] = '\0';
+                    if (strlen(genre) == 0) {
+                        printf("✗ Genre cannot be empty.\n");
+                        continue;
+                    }
                     
-                    printf("Duration (minutes): ");
-                    scanf("%d", &duration_min);
+                    // Duration (required)
+                    printf("Duration in minutes (*required): ");
+                    if (scanf("%d", &duration_min) != 1 || duration_min <= 0) {
+                        printf("✗ Duration must be a positive number.\n");
+                        while (getchar() != '\n'); // clear stdin
+                        continue;
+                    }
                     while (getchar() != '\n'); // clear stdin
                     
-                    printf("Description: ");
+                    // Description (optional)
+                    printf("Description (optional, press Enter to skip): ");
                     fgets(description, sizeof(description), stdin);
                     description[strcspn(description, "\r\n")] = '\0';
                     
@@ -564,8 +585,14 @@ int main(int argc, char *argv[]) {
                         if (description[i] == ' ') description[i] = '_';
                     }
                     
-                    snprintf(line, sizeof(line), "ADD_MOVIE %s %s %d %s\n", 
-                             title, genre, duration_min, description);
+                    // Build command - description only if provided
+                    if (strlen(description) > 0) {
+                        snprintf(line, sizeof(line), "ADD_MOVIE %s %s %d %s\n", 
+                                 title, genre, duration_min, description);
+                    } else {
+                        snprintf(line, sizeof(line), "ADD_MOVIE %s %s %d\n", 
+                                 title, genre, duration_min);
+                    }
                     client_send_line(sockfd, line);
                     
                     if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
@@ -574,11 +601,13 @@ int main(int argc, char *argv[]) {
                     }
                     if (!print_friendly_message(resp) && !strstr(resp, "END")) {
                         printf("SERVER: %s", resp);
-                    } else if (strstr(resp, "END")) {
-                        printf("Add movie successful!\n");
+                    } if(strstr(resp, "OK ADD_MOVIE")) {
+                        client_recv_line(sockfd, resp, sizeof(resp)); // consume END
+                    }else if (strstr(resp, "END")) {
+                        printf("✓ Movie added successfully!\n");
                         continue;
                     }
-                } else if (choice == 2) {
+                } else if (choice == 3) {
                     // ADD_SHOW
                     uint32_t movie_id;
                     char cinema_id[64], room_id[64], date[32], start_time[32], end_time[32];
@@ -630,7 +659,7 @@ int main(int argc, char *argv[]) {
                     if (client_recv_line(sockfd, resp, sizeof(resp)) > 0) {
                         // Silently consume END line
                     }
-                } else if (choice == 3) {
+                } else if (choice == 4) {
                     // UPDATE_SHOW
                     char show_id_str[16], date[16], time_str[32];
                     
@@ -658,7 +687,7 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
 
-                } else if (choice == 4) {
+                } else if (choice == 5) {
                     // CANCEL_SHOW  
                     char show_id_str[16];
                     
@@ -676,7 +705,7 @@ int main(int argc, char *argv[]) {
                     if (!print_friendly_message(resp)) {
                         printf("SERVER: %s", resp);
                     }
-                } else if (choice == 5) {
+                } else if (choice == 6) {
                     // LIST_SHOW - Admin/Manager view all shows
                     char movie_id_str[16] = "";
                     char date_str[16] = "";
@@ -777,7 +806,7 @@ int main(int argc, char *argv[]) {
                         }
                         printf("-----------------------------------------------------------------------------------\n\n");
                     }
-                } else if (choice == 6) {
+                } else if (choice == 7) {
                     // GET_SEATS
                     char show_id_str[16];
                     
@@ -880,7 +909,7 @@ int main(int argc, char *argv[]) {
                         }
                         printf("\n");
                     }
-                } else if (choice == 9) {
+                } else if (choice == 8) {
                     // CREATE_USER
                     char new_username[64], new_password[64];
                     
@@ -904,7 +933,7 @@ int main(int argc, char *argv[]) {
                     }
                     
                 } else if (choice == 9) {
-                    // CREATE_USER
+                    // GRANT_ROLE_MANAGER
                     char target_username[64], role[32];
                     
                     printf("Username: ");
@@ -927,29 +956,6 @@ int main(int argc, char *argv[]) {
                     }
                     
                 } else if (choice == 10) {
-                    // GRANT_ROLE
-                    char target_username[64], role[32];
-                    
-                    printf("Username: ");
-                    fgets(target_username, sizeof(target_username), stdin);
-                    target_username[strcspn(target_username, "\r\n")] = '\0';
-                    
-                    printf("Role (CUSTOMER/MANAGER/ADMIN): ");
-                    fgets(role, sizeof(role), stdin);
-                    role[strcspn(role, "\r\n")] = '\0';
-                    
-                    snprintf(line, sizeof(line), "GRANT_ROLE %s %s\n", target_username, role);
-                    client_send_line(sockfd, line);
-                    
-                    if (client_recv_line(sockfd, resp, sizeof(resp)) <= 0) {
-                        printf("Server closed connection\n");
-                        break;
-                    }
-                    if (!print_friendly_message(resp)) {
-                        printf("SERVER: %s", resp);
-                    }
-                    
-                } else if (choice == 11) {
                     // REVOKE_ROLE
                     char target_username[64], role[32];
                     
@@ -972,7 +978,7 @@ int main(int argc, char *argv[]) {
                         printf("SERVER: %s", resp);
                     }
                     
-                } else if (choice == 12) {
+                } else if (choice == 11) {
                     // QUIT
                 } else {
                     printf("Invalid choice.\n");

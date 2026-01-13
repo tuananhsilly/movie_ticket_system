@@ -66,11 +66,12 @@ void handle_search_movie(client_session_t *session, const request_t *req) {
     // 6. Gửi từng dòng MOVIE ... - gửi ngay lập tức từng dòng
     for (int i = 0; i < found; i++) {
         snprintf(resp, sizeof(resp),
-                 "MOVIE %u %s %s %d\n",
+                 "MOVIE %u %s %s %d %s\n",
                  results[i].id,
                  results[i].title,
                  results[i].genre,
-                 results[i].duration_min);
+                 results[i].duration_min,
+                 strlen(results[i].description) > 0 ? results[i].description : "N/A");
         send_line(session->sockfd, resp);
         log_msg("SEND", session->sockfd, resp);
     }
@@ -202,11 +203,12 @@ void handle_list_movie(client_session_t *session, const request_t *req) {
     // từng dòng MOVIE
     for (int i = 0; i < found; i++) {
         snprintf(resp, sizeof(resp),
-                 "MOVIE %u %s %s %d\n",
+                 "MOVIE %u %s %s %d %s\n",
                  results[i].id,
                  results[i].title,
                  results[i].genre,
-                 results[i].duration_min);
+                 results[i].duration_min,
+                 strlen(results[i].description) > 0 ? results[i].description : "N/A");
         send(session->sockfd, resp, strlen(resp), 0);
         log_msg("SEND", session->sockfd, resp);
     }

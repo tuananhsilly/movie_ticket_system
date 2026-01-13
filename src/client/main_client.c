@@ -462,7 +462,7 @@ int main(int argc, char *argv[]) {
                     // LIST_MOVIE
                     char param[128] = "";
                     
-                    printf("Filter type (title/genre/cinema/timeslot, or leave empty for all): ");
+                    printf("Press Enter for filtering by all: ");
                     fgets(param, sizeof(param), stdin);
                     param[strcspn(param, "\r\n")] = '\0';
                     
@@ -501,7 +501,7 @@ int main(int argc, char *argv[]) {
                         sscanf(trimmed_resp, "OK LIST_MOVIE FOUND %d", &movie_count);
                         
                         printf("\n=== Found %d movie(s) ===\n", movie_count);
-                        printf("%-6s %-30s %-15s %-5s %-40s\n", "ID", "Title", "Genre", "Min", "Description");
+                        printf("%-6s %-30s %-15s %-5s \n", "ID", "Title", "Genre", "Duration");
                         printf("---------------------------------------------------------------------------------------------------\n");
                         
                         while (1) {
@@ -518,19 +518,16 @@ int main(int argc, char *argv[]) {
                             char title[128], genre[64], desc[256] = "";
                             int duration;
                             
-                            if (sscanf(resp, "MOVIE %u %127s %63s %d %255[^\n]", 
-                                       &movie_id, title, genre, &duration, desc) >= 4) {
+                            if (sscanf(resp, "MOVIE %u %127s %63s %d[^\n]", 
+                                       &movie_id, title, genre, &duration) >= 3) {
                                 for (int i = 0; title[i]; i++) {
                                     if (title[i] == '_') title[i] = ' ';
                                 }
                                 for (int i = 0; genre[i]; i++) {
                                     if (genre[i] == '_') genre[i] = ' ';
                                 }
-                                for (int i = 0; desc[i]; i++) {
-                                    if (desc[i] == '_') desc[i] = ' ';
-                                }
-                                printf("%-6u %-30.30s %-15s %-5d %.40s\n", 
-                                       movie_id, title, genre, duration, desc);
+                                printf("%-6u %-30.30s %-15s %-5d\n", 
+                                       movie_id, title, genre, duration);
                             }
                         }
                         printf("---------------------------------------------------------------------------------------------------\n\n");
@@ -1039,8 +1036,8 @@ int main(int argc, char *argv[]) {
                     sscanf(trimmed_resp, "OK SEARCH_MOVIE FOUND %d", &movie_count);
                     
                     printf("\n=== Found %d movie(s) ===\n", movie_count);
-                    printf("%-8s %-40s %-20s %-10s\n", "ID", "Title", "Genre", "Duration");
-                    printf("--------------------------------------------------------------------------------\n");
+                    printf("%-6s %-30s %-12s %-6s %-40s\n", "ID", "Title", "Genre", "Min", "Description");
+                    printf("----------------------------------------------------------------------------------------------------\n");
                     
                     // Đọc và hiển thị tất cả MOVIE lines
                     while (1) {
@@ -1054,13 +1051,14 @@ int main(int argc, char *argv[]) {
                             break; // Don't print END
                         }
                 
-                        // Parse MOVIE line: MOVIE <id> <title> <genre> <duration>
+                        // Parse MOVIE line: MOVIE <id> <title> <genre> <duration> <description>
                         unsigned int movie_id;
                         char title[128];
                         char genre[64];
+                        char desc[256] = "";
                         int duration;
                         
-                        if (sscanf(resp, "MOVIE %u %127s %63s %d", &movie_id, title, genre, &duration) == 4) {
+                        if (sscanf(resp, "MOVIE %u %127s %63s %d %255s", &movie_id, title, genre, &duration, desc) >= 4) {
                             // Replace underscores with spaces for display
                             for (int i = 0; title[i]; i++) {
                                 if (title[i] == '_') title[i] = ' ';
@@ -1068,11 +1066,14 @@ int main(int argc, char *argv[]) {
                             for (int i = 0; genre[i]; i++) {
                                 if (genre[i] == '_') genre[i] = ' ';
                             }
-                            printf("%-8u %-40s %-20s %-10d min\n", movie_id, title, genre, duration);
+                            for (int i = 0; desc[i]; i++) {
+                                if (desc[i] == '_') desc[i] = ' ';
+                            }
+                            printf("%-6u %-30.30s %-12s %-6d %.40s\n", movie_id, title, genre, duration, desc);
                         }
                         fflush(stdout);
                     }
-                    printf("--------------------------------------------------------------------------------\n\n");
+                    printf("----------------------------------------------------------------------------------------------------\n\n");
                 }
             } else if (choice == 2) {
                 // LIST_MOVIE
@@ -1086,6 +1087,7 @@ int main(int argc, char *argv[]) {
                 printf(" 1. GENRE\n");
                 printf(" 2. CINEMA\n");
                 printf(" 3. TIMESLOT\n");
+                printf(" 4. ALL\n");
                 printf("Choose: ");
                 if (scanf("%d", &sub) != 1) break;
                 while (getchar() != '\n');
@@ -1112,7 +1114,9 @@ int main(int argc, char *argv[]) {
                     to[strcspn(to, "\r\n")] = '\0';
                     // format: YYYY-MM-DD_HH:MM-HH:MM
                     snprintf(param, sizeof(param), "TIMESLOT %s_%s-%s", date, from, to);
-                } else {
+                } else if (sub == 4) {
+                    param[0] = '\0';
+                }else {
                     printf("Invalid filter type\n");
                     continue;
                 }
@@ -1168,8 +1172,8 @@ int main(int argc, char *argv[]) {
                     sscanf(trimmed_resp, "OK LIST_MOVIE FOUND %d", &movie_count);
                     
                     printf("\n=== Found %d movie(s) ===\n", movie_count);
-                    printf("%-8s %-40s %-20s %-10s\n", "ID", "Title", "Genre", "Duration");
-                    printf("--------------------------------------------------------------------------------\n");
+                    printf("%-6s %-30s %-12s %-6s %-40s\n", "ID", "Title", "Genre", "Min", "Description");
+                    printf("----------------------------------------------------------------------------------------------------\n");
                     
                     // Đọc và hiển thị tất cả MOVIE lines
                     while (1) {
@@ -1183,13 +1187,14 @@ int main(int argc, char *argv[]) {
                             break; // Don't print END
                         }
                         
-                        // Parse MOVIE line: MOVIE <id> <title> <genre> <duration>
+                        // Parse MOVIE line: MOVIE <id> <title> <genre> <duration> <description>
                         unsigned int movie_id;
                         char title[128];
                         char genre[64];
+                        char desc[256] = "";
                         int duration;
                         
-                        if (sscanf(resp, "MOVIE %u %127s %63s %d", &movie_id, title, genre, &duration) == 4) {
+                        if (sscanf(resp, "MOVIE %u %127s %63s %d %255s", &movie_id, title, genre, &duration, desc) >= 4) {
                             // Replace underscores with spaces for display
                             for (int i = 0; title[i]; i++) {
                                 if (title[i] == '_') title[i] = ' ';
@@ -1197,18 +1202,21 @@ int main(int argc, char *argv[]) {
                             for (int i = 0; genre[i]; i++) {
                                 if (genre[i] == '_') genre[i] = ' ';
                             }
-                            printf("%-8u %-40s %-20s %-10d min\n", movie_id, title, genre, duration);
+                            for (int i = 0; desc[i]; i++) {
+                                if (desc[i] == '_') desc[i] = ' ';
+                            }
+                            printf("%-6u %-30.30s %-12s %-6d %.40s\n", movie_id, title, genre, duration, desc);
                         }
                         fflush(stdout);
                     }
-                    printf("--------------------------------------------------------------------------------\n\n");
+                    printf("----------------------------------------------------------------------------------------------------\n\n");
                 }
             } else if (choice == 3) {
                 // LIST_SHOW
                 char movie_id_str[16] = "";
                 char date_str[16] = "";
                 
-                printf("Movie ID (leave empty if you are ADMIN/MANAGER to view all shows): ");
+                printf("Movie ID: ");
                 fgets(movie_id_str, sizeof(movie_id_str), stdin);
                 movie_id_str[strcspn(movie_id_str, "\r\n")] = '\0';
                 

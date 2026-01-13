@@ -4735,3 +4735,8 @@
 [2025-12-23 22:29:48] SEND client=4 END
 
 [2025-12-23 22:31:00] INFO client=4 INFO Connection_closed
+[2026-01-13 07:43:36] INFO client=4 INFO New_connection
+[2026-01-13 07:43:39] RECV client=4 LOGIN admin admin1
+
+[2026-01-13 07:43:39] SEND client=4 OK LOGIN LOGIN_OK ADMIN
+

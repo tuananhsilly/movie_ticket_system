@@ -49,26 +49,24 @@ make
 
 ## Matching Information for Multi-Model AI Things Lab (Employer Fit)
 
-Based on this project, I can contribute in areas that are typically relevant to applied AI systems and engineering labs:
+### Lab Values and Mission Alignment
 
-1. **System-level engineering mindset**
-   - Built a full client-server system from protocol to user-facing workflow.
-   - Comfortable with low-level debugging, reliability, and performance-aware development.
+1. **Interdisciplinary, proactive, and self-motivated**
+   - This project required combining systems programming, networking, protocol design, and product workflow thinking.
+   - I independently designed and integrated client, server, and shared modules to deliver an end-to-end working system.
 
-2. **Data and protocol design**
-   - Designed and implemented a structured text protocol with command grammar and error handling.
-   - Experience turning product use-cases into robust interface contracts.
+2. **World-class research and education in applied AI/ML**
+   - While this implementation is a software-engineering system, it is built as a strong foundation for applied AI/ML extensions.
+   - The modular design can support recommendation, demand forecasting, anomaly detection, or intelligent scheduling experiments.
 
-3. **Scalable software organization**
-   - Modular architecture (handlers, protocol, data layer) that supports feature growth and maintainability.
-   - Clear separation of concerns suitable for larger research/production codebases.
+3. **Meaningful challenges, integrity, innovation, and rigorous computational methods**
+   - The project addresses a real operational challenge: reliable ticket booking with role-aware access and seat-state consistency.
+   - I applied structured protocol rules, explicit error handling, and clear state-driven logic to keep behavior correct and transparent.
 
-4. **Access control and safe operations**
-   - Implemented role-based permissions and session-state validation.
-   - Practical understanding of secure-by-default backend flow design.
+4. **Bridge science and engineering for academic and societal impact**
+   - The architecture translates abstract system design concepts into deployable software components.
+   - It demonstrates how formal workflow/use-case modeling can become practical tools that improve real user-facing services.
 
-5. **Experiment-ready foundation**
-   - The system can be extended with analytics, recommendation modules, or AI-assisted decision components.
-   - Suitable base for integrating multimodal/ML-driven features in future iterations.
-
-> Note: I could not directly access the provided lab URL from this execution environment, so this fit section is aligned to common lab requirements for AI systems/software engineering roles. If you share the exact requirement bullets, I can tailor this section line-by-line to match them.
+5. **Leadership and leadership growth**
+   - The codebase is organized for maintainability and collaboration through clear module boundaries and documentation.
+   - This reflects my approach to leadership: building systems that others can understand, extend, and improve together.

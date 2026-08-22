@@ -1,0 +1,74 @@
+# Movie Ticket System (C / TCP Client-Server)
+
+This project is a socket-based movie ticket booking system implemented in C, designed with a custom text protocol, role-based access control, and modular server handlers.
+
+## Project Summary
+
+The system includes:
+- **TCP server** handling multiple client requests through a request/response protocol
+- **CLI client** for user interaction
+- **Role-based operations** for Customer, Manager, and Admin
+- **Core ticketing flow**: register, login, search movie, list shows, view seats, book seats, and view bookings
+- **Admin/Manager operations** such as managing movies/shows and monitoring booking-related data
+
+## Technical Highlights
+
+- **Language & tooling:** C (GCC), Makefile build pipeline
+- **Networking:** Custom TCP protocol with structured command/response format
+- **Architecture:** Clear separation between client, server, handlers, and shared/common modules
+- **Data handling:** Structured models and DB access layer in `src/common`
+- **Security basics:** Authentication, session state checks, and role-based authorization before sensitive commands
+
+## Repository Structure
+
+- `src/client` – command-line client
+- `src/server` – server core and request handlers
+- `src/common` – shared models, protocol parser, DB helpers, utilities
+- `docs/protocol-spec.md` – protocol contract and error/status conventions
+- `docs/usecases.md` – business/use-case coverage
+- `docs/state-machines` – state diagrams for login, booking, and admin flows
+
+## Build & Run
+
+```bash
+cd /home/runner/work/movie_ticket_system/movie_ticket_system
+make clean
+make
+./build/server
+# In another terminal:
+./build/client
+```
+
+## Example Capabilities Demonstrated
+
+- User lifecycle: registration and login
+- Movie discovery and show listing
+- Seat-map retrieval with seat status tracking (FREE/BOOKED/HELD)
+- Seat booking with validation
+- Admin-level listing and monitoring of shows
+
+## Matching Information for Multi-Model AI Things Lab (Employer Fit)
+
+Based on this project, I can contribute in areas that are typically relevant to applied AI systems and engineering labs:
+
+1. **System-level engineering mindset**
+   - Built a full client-server system from protocol to user-facing workflow.
+   - Comfortable with low-level debugging, reliability, and performance-aware development.
+
+2. **Data and protocol design**
+   - Designed and implemented a structured text protocol with command grammar and error handling.
+   - Experience turning product use-cases into robust interface contracts.
+
+3. **Scalable software organization**
+   - Modular architecture (handlers, protocol, data layer) that supports feature growth and maintainability.
+   - Clear separation of concerns suitable for larger research/production codebases.
+
+4. **Access control and safe operations**
+   - Implemented role-based permissions and session-state validation.
+   - Practical understanding of secure-by-default backend flow design.
+
+5. **Experiment-ready foundation**
+   - The system can be extended with analytics, recommendation modules, or AI-assisted decision components.
+   - Suitable base for integrating multimodal/ML-driven features in future iterations.
+
+> Note: I could not directly access the provided lab URL from this execution environment, so this fit section is aligned to common lab requirements for AI systems/software engineering roles. If you share the exact requirement bullets, I can tailor this section line-by-line to match them.
